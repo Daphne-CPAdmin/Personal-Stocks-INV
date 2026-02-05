@@ -26,6 +26,43 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def format_date_custom(date_str):
+    """Format date string to 'Jan162026 9:30PM' format"""
+    if not date_str or pd.isna(date_str):
+        return '-'
+    try:
+        # Try parsing different date formats
+        if isinstance(date_str, str):
+            # Try common formats
+            for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%m/%d/%Y %H:%M:%S', '%m/%d/%Y']:
+                try:
+                    dt = datetime.strptime(date_str, fmt)
+                    break
+                except ValueError:
+                    continue
+            else:
+                # Try pandas parsing
+                dt = pd.to_datetime(date_str, errors='coerce')
+                if pd.isna(dt):
+                    return date_str
+        else:
+            dt = pd.to_datetime(date_str, errors='coerce')
+            if pd.isna(dt):
+                return str(date_str)
+        
+        # Format: Jan162026 9:30PM
+        month_abbr = dt.strftime('%b')  # Jan, Feb, etc.
+        day = dt.strftime('%d').lstrip('0') or '0'  # Remove leading zero
+        year = dt.strftime('%Y')
+        hour = int(dt.strftime('%I').lstrip('0') or '12')  # 12-hour format, remove leading zero
+        minute = dt.strftime('%M')
+        am_pm = dt.strftime('%p')  # AM/PM
+        
+        return f"{month_abbr}{day}{year} {hour}:{minute}{am_pm}"
+    except Exception as e:
+        logger.warning(f"Error formatting date '{date_str}': {str(e)}")
+        return str(date_str)
+
 # Initialize DataConnector
 connector = DataConnector({})
 
@@ -68,6 +105,20 @@ def inventory():
                         df['total_bought_quantity'] = df['quantity']
                     else:
                         df['total_bought_quantity'] = 0
+                
+                # Sort by product_name alphabetically, then by date_added (newest first for same product)
+                if 'product_name' in df.columns:
+                    # Convert date_added to datetime for proper sorting
+                    if 'date_added' in df.columns:
+                        df['date_added_parsed'] = pd.to_datetime(df['date_added'], errors='coerce')
+                        df = df.sort_values(['product_name', 'date_added_parsed'], ascending=[True, False], na_position='last')
+                        df = df.drop('date_added_parsed', axis=1)
+                    else:
+                        df = df.sort_values('product_name', ascending=True)
+                
+                # Format dates before converting to dict
+                if 'date_added' in df.columns:
+                    df['date_added'] = df['date_added'].apply(format_date_custom)
                 
                 inventory_items = df.to_dict('records')
         else:

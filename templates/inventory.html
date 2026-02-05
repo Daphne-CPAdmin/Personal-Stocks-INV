@@ -28,7 +28,7 @@
                 {% if items %}
                     {% for item in items %}
                     <tr>
-                        <td>{{ item.get('product_name', 'N/A') }}</td>
+                        <td title="{{ item.get('product_name', 'N/A') }}">{{ item.get('product_name', 'N/A') }}</td>
                         <td>₱{{ "%.2f"|format(item.get('total_price', 0)) }}</td>
                         <td>₱{{ "%.2f"|format(item.get('shipping_admin_fee', 0)) }}</td>
                         <td>₱{{ "%.2f"|format(item.get('total_cost_per_unit', 0)) }}</td>
@@ -39,15 +39,15 @@
                             {% set total_bought = item.get('total_bought_quantity', item.get('quantity', 1)) %}
                             {% set percentage = (remaining / total_bought * 100) if total_bought > 0 else 0 %}
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <div style="flex: 1; background-color: #e5e7eb; border-radius: 0.25rem; height: 24px; position: relative; overflow: hidden;">
+                                <div style="flex: 1; background-color: #e5e7eb; border-radius: 0.25rem; height: 20px; position: relative; overflow: hidden; min-width: 60px;">
                                     <div style="background-color: {% if percentage > 50 %}#10b981{% elif percentage > 25 %}#f59e0b{% else %}#ef4444{% endif %}; height: 100%; width: {{ percentage }}%; transition: width 0.3s;"></div>
                                 </div>
-                                <span style="min-width: 40px; text-align: right; font-weight: 600;">{{ remaining }}</span>
+                                <span style="min-width: 30px; text-align: right; font-weight: 600; font-size: 0.8125rem;">{{ remaining }}</span>
                             </div>
                         </td>
-                        <td>{{ item.get('date_added', '-') }}</td>
+                        <td style="font-size: 0.75rem;">{{ item.get('date_added', '-') }}</td>
                         <td>
-                            <button class="btn btn-sm btn-secondary" onclick="openStatusModal({{ loop.index0 }}, '{{ item.get('product_name', '') }}', 'in_stock', {{ item.get('remaining_qty', item.get('quantity', 0)) }})">
+                            <button class="btn btn-sm btn-secondary" onclick="openStatusModal({{ loop.index0 }}, '{{ item.get('product_name', '') }}', 'in_stock', {{ item.get('remaining_qty', item.get('quantity', 0)) }})" style="font-size: 0.75rem; padding: 0.4rem 0.8rem;">
                                 Update Status
                             </button>
                         </td>
