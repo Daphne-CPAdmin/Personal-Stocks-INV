@@ -421,29 +421,34 @@ def invoices():
     try:
         if INVOICES_SHEET_URL:
             df = connector.read_from_sheets(INVOICES_SHEET_URL)
-            invoices = df.to_dict('records')
-            # Parse items JSON for each invoice
-            for invoice in invoices:
-                items_str = invoice.get('items', '[]')
-                try:
-                    if isinstance(items_str, str):
-                        # Try JSON first
-                        try:
-                            invoice['items_parsed'] = json.loads(items_str)
-                        except json.JSONDecodeError:
-                            # If JSON fails, try ast.literal_eval (for Python string representation)
-                            import ast
-                            try:
-                                invoice['items_parsed'] = ast.literal_eval(items_str)
-                            except (ValueError, SyntaxError):
-                                invoice['items_parsed'] = []
-                    elif isinstance(items_str, list):
-                        invoice['items_parsed'] = items_str
-                    else:
-                        invoice['items_parsed'] = []
-                except Exception as e:
-                    logger.warning(f"Error parsing items for invoice {invoice.get('invoice_number', 'unknown')}: {str(e)}")
-                    invoice['items_parsed'] = []
+            if df.empty:
+                invoices = []
+            else:
+                # Group by invoice_number to reconstruct invoice structure
+                invoices_dict = {}
+                for _, row in df.iterrows():
+                    invoice_num = row.get('invoice_number', '')
+                    if invoice_num not in invoices_dict:
+                        invoices_dict[invoice_num] = {
+                            'invoice_number': invoice_num,
+                            'customer_name': row.get('customer_name', ''),
+                            'products_summary': row.get('products_summary', ''),
+                            'shipment_fee': row.get('shipment_fee', 0),
+                            'total_amount': row.get('total_amount', 0),
+                            'invoice_date': row.get('invoice_date', ''),
+                            'created_at': row.get('created_at', ''),
+                            'items_parsed': []
+                        }
+                    # Collect items for modal view
+                    product_name = row.get('product_name', '')
+                    if product_name:
+                        invoices_dict[invoice_num]['items_parsed'].append({
+                            'name': product_name,
+                            'price': float(row.get('price_sold', 0)),
+                            'quantity': int(row.get('quantity', 0)),
+                            'subtotal': float(row.get('line_total', 0))
+                        })
+                invoices = list(invoices_dict.values())
         else:
             invoices = []
         
@@ -513,6 +518,7 @@ def create_invoice():
         invoice_date = data.get('invoice_date', datetime.now().strftime('%Y-%m-%d'))
         
         invoice_number = f"INV-{datetime.now().strftime('%Y%m%d')}-{len(items)}"
+        created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
         # Generate products summary string
         products_summary_parts = []
@@ -524,23 +530,47 @@ def create_invoice():
             products_summary_parts.append(f"{product_name} ({quantity} pcs × ₱{price:.2f}) = ₱{subtotal:.2f}")
         products_summary = "; ".join(products_summary_parts) if products_summary_parts else "No items"
         
-        new_invoice = {
-            'invoice_number': invoice_number,
-            'customer_name': customer_name,
-            'products': products_summary,  # Summary string for display
-            'items': json.dumps(items),  # Store as JSON string for detailed modal view
-            'shipment_fee': shipment_fee,
-            'total_amount': total_amount,
-            'invoice_date': invoice_date,
-            'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        }
+        # Create one row per product
+        invoice_rows = []
+        for item in items:
+            invoice_row = {
+                'invoice_number': invoice_number,
+                'customer_name': customer_name,
+                'products_summary': products_summary,
+                'product_name': item.get('name', 'N/A'),
+                'price_sold': item.get('price', 0),
+                'quantity': item.get('quantity', 0),
+                'line_total': item.get('subtotal', 0),
+                'shipment_fee': shipment_fee,
+                'total_amount': total_amount,
+                'invoice_date': invoice_date,
+                'created_at': created_at
+            }
+            invoice_rows.append(invoice_row)
+        
+        # If no items, create one row with empty product
+        if not invoice_rows:
+            invoice_row = {
+                'invoice_number': invoice_number,
+                'customer_name': customer_name,
+                'products_summary': 'No items',
+                'product_name': '',
+                'price_sold': 0,
+                'quantity': 0,
+                'line_total': 0,
+                'shipment_fee': shipment_fee,
+                'total_amount': total_amount,
+                'invoice_date': invoice_date,
+                'created_at': created_at
+            }
+            invoice_rows.append(invoice_row)
         
         if INVOICES_SHEET_URL:
             df = connector.read_from_sheets(INVOICES_SHEET_URL)
             # Handle empty DataFrame
             if df.empty:
-                df = pd.DataFrame(columns=['invoice_number', 'customer_name', 'products', 'items', 'shipment_fee', 'total_amount', 'invoice_date', 'created_at'])
-            new_invoice_df = pd.DataFrame([new_invoice])
+                df = pd.DataFrame(columns=['invoice_number', 'customer_name', 'products_summary', 'product_name', 'price_sold', 'quantity', 'line_total', 'shipment_fee', 'total_amount', 'invoice_date', 'created_at'])
+            new_invoice_df = pd.DataFrame(invoice_rows)
             df = pd.concat([df, new_invoice_df], ignore_index=True)
             connector.write_to_sheets(df, INVOICES_SHEET_URL)
         
