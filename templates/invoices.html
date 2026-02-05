@@ -132,17 +132,21 @@
                 <h4>Items</h4>
                 <div id="invoiceItems">
                     <div class="invoice-item">
-                        <select class="item-name" required>
-                            <option value="">-- Select Product --</option>
-                            {% if product_names %}
-                                {% for product_name in product_names %}
-                                <option value="{{ product_name }}">{{ product_name }}</option>
-                                {% endfor %}
-                            {% endif %}
-                        </select>
-                        <input type="number" step="0.01" placeholder="Price (₱)" class="item-price" required>
-                        <input type="number" placeholder="Qty" class="item-qty" value="1" required>
-                        <button type="button" class="btn btn-sm btn-danger" onclick="removeItem(this)">Remove</button>
+                        <div class="form-group" style="position: relative; flex: 1;">
+                            <label style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem;">Product Name *</label>
+                            <input type="text" class="item-name-input" placeholder="Type to search products..." autocomplete="off" required>
+                            <input type="hidden" class="item-name-hidden" required>
+                            <div class="autocomplete-suggestions" style="display: none;"></div>
+                        </div>
+                        <div class="form-group" style="flex: 0 0 150px;">
+                            <label style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem;">Price Sold (₱) *</label>
+                            <input type="number" step="0.01" placeholder="0.00" class="item-price" required oninput="updateInvoiceTotal()">
+                        </div>
+                        <div class="form-group" style="flex: 0 0 100px;">
+                            <label style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem;">Quantity *</label>
+                            <input type="number" placeholder="1" class="item-qty" value="1" required oninput="updateInvoiceTotal()">
+                        </div>
+                        <button type="button" class="btn btn-sm btn-danger" onclick="removeItem(this)" style="align-self: flex-end; margin-top: 1.5rem;">Remove</button>
                     </div>
                 </div>
                 <button type="button" class="btn btn-secondary" onclick="addInvoiceItem()">+ Add Item</button>
@@ -162,48 +166,284 @@
 {% endblock %}
 
 {% block scripts %}
+<style>
+.invoice-items-section {
+    margin: 1.5rem 0;
+}
+
+.invoice-item {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background-color: #f9fafb;
+    border-radius: 0.5rem;
+    border: 1px solid #e5e7eb;
+}
+
+.invoice-item .form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.invoice-item .item-name-input,
+.invoice-item .item-price,
+.invoice-item .item-qty {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+}
+
+.invoice-item .item-name-input:focus,
+.invoice-item .item-price:focus,
+.invoice-item .item-qty:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.autocomplete-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #ddd;
+    border-top: none;
+    border-radius: 0 0 0.5rem 0.5rem;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1001;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.autocomplete-suggestion {
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background-color 0.2s;
+    font-size: 0.875rem;
+}
+
+.autocomplete-suggestion:hover,
+.autocomplete-suggestion.highlighted {
+    background-color: #6366f1;
+    color: white;
+}
+
+.autocomplete-suggestion:last-child {
+    border-bottom: none;
+}
+
+.modal-large {
+    max-width: 800px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.invoice-total {
+    margin: 1.5rem 0;
+    padding: 1rem;
+    background-color: #f0f0f0;
+    border-radius: 0.5rem;
+    text-align: right;
+    font-size: 1.25rem;
+}
+</style>
 <script>
+// Store product names from server
+const allProducts = {% if product_names %}{{ product_names|tojson }}{% else %}[]{% endif %}.filter(p => p && p.trim());
+
 let invoiceItems = [];
+let selectedProductIndices = {}; // Track selected product index for each item
 
 function openCreateInvoiceModal() {
     document.getElementById('createInvoiceModal').style.display = 'block';
     invoiceItems = [];
     updateInvoiceTotal();
+    // Initialize autocomplete for existing items
+    document.querySelectorAll('.invoice-item').forEach(item => {
+        initializeAutocomplete(item);
+    });
 }
 
 function closeCreateInvoiceModal() {
     document.getElementById('createInvoiceModal').style.display = 'none';
     document.getElementById('createInvoiceForm').reset();
-    const productOptions = {% if product_names %}{{ product_names|tojson }}{% else %}[]{% endif %};
-    let optionsHtml = '<option value="">-- Select Product --</option>';
-    productOptions.forEach(name => {
-        optionsHtml += `<option value="${name}">${name}</option>`;
-    });
-    document.getElementById('invoiceItems').innerHTML = `<div class="invoice-item"><select class="item-name" required>${optionsHtml}</select><input type="number" step="0.01" placeholder="Price (₱)" class="item-price" required><input type="number" placeholder="Qty" class="item-qty" value="1" required><button type="button" class="btn btn-sm btn-danger" onclick="removeItem(this)">Remove</button></div>`;
+    // Reset to single empty item with autocomplete
+    document.getElementById('invoiceItems').innerHTML = `
+        <div class="invoice-item">
+            <div class="form-group" style="position: relative; flex: 1;">
+                <label style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem;">Product Name *</label>
+                <input type="text" class="item-name-input" placeholder="Type to search products..." autocomplete="off" required>
+                <input type="hidden" class="item-name-hidden" required>
+                <div class="autocomplete-suggestions" style="display: none;"></div>
+            </div>
+            <div class="form-group" style="flex: 0 0 150px;">
+                <label style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem;">Price Sold (₱) *</label>
+                <input type="number" step="0.01" placeholder="0.00" class="item-price" required oninput="updateInvoiceTotal()">
+            </div>
+            <div class="form-group" style="flex: 0 0 100px;">
+                <label style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem;">Quantity *</label>
+                <input type="number" placeholder="1" class="item-qty" value="1" required oninput="updateInvoiceTotal()">
+            </div>
+            <button type="button" class="btn btn-sm btn-danger" onclick="removeItem(this)" style="align-self: flex-end; margin-top: 1.5rem;">Remove</button>
+        </div>
+    `;
     invoiceItems = [];
+    selectedProductIndices = {};
+    updateInvoiceTotal();
+    // Reinitialize autocomplete for the new item
+    initializeAutocomplete(document.querySelector('.invoice-item:last-child'));
 }
 
 function addInvoiceItem() {
     const itemsDiv = document.getElementById('invoiceItems');
-    const productOptions = {% if product_names %}{{ product_names|tojson }}{% else %}[]{% endif %};
-    let optionsHtml = '<option value="">-- Select Product --</option>';
-    productOptions.forEach(name => {
-        optionsHtml += `<option value="${name}">${name}</option>`;
-    });
     const newItem = document.createElement('div');
     newItem.className = 'invoice-item';
     newItem.innerHTML = `
-        <select class="item-name" required>${optionsHtml}</select>
-        <input type="number" step="0.01" placeholder="Price (₱)" class="item-price" required oninput="updateInvoiceTotal()">
-        <input type="number" placeholder="Qty" class="item-qty" value="1" required oninput="updateInvoiceTotal()">
-        <button type="button" class="btn btn-sm btn-danger" onclick="removeItem(this)">Remove</button>
+        <div class="form-group" style="position: relative; flex: 1;">
+            <label style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem;">Product Name *</label>
+            <input type="text" class="item-name-input" placeholder="Type to search products..." autocomplete="off" required>
+            <input type="hidden" class="item-name-hidden" required>
+            <div class="autocomplete-suggestions" style="display: none;"></div>
+        </div>
+        <div class="form-group" style="flex: 0 0 150px;">
+            <label style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem;">Price Sold (₱) *</label>
+            <input type="number" step="0.01" placeholder="0.00" class="item-price" required oninput="updateInvoiceTotal()">
+        </div>
+        <div class="form-group" style="flex: 0 0 100px;">
+            <label style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem;">Quantity *</label>
+            <input type="number" placeholder="1" class="item-qty" value="1" required oninput="updateInvoiceTotal()">
+        </div>
+        <button type="button" class="btn btn-sm btn-danger" onclick="removeItem(this)" style="align-self: flex-end; margin-top: 1.5rem;">Remove</button>
     `;
     itemsDiv.appendChild(newItem);
+    initializeAutocomplete(newItem);
 }
 
 function removeItem(button) {
     button.parentElement.remove();
     updateInvoiceTotal();
+}
+
+function initializeAutocomplete(itemElement) {
+    const input = itemElement.querySelector('.item-name-input');
+    const hidden = itemElement.querySelector('.item-name-hidden');
+    const suggestions = itemElement.querySelector('.autocomplete-suggestions');
+    let selectedIndex = -1;
+    
+    if (!input || !hidden || !suggestions) return;
+    
+    function filterProducts(query) {
+        if (query.length === 0) {
+            return allProducts.slice(0, 7);
+        }
+        const matches = allProducts.filter(product => 
+            product.toLowerCase().includes(query.toLowerCase())
+        );
+        return matches.slice(0, Math.max(7, matches.length));
+    }
+    
+    function showSuggestions(matches) {
+        if (matches.length === 0) {
+            suggestions.innerHTML = '<div class="autocomplete-suggestion" style="color: #999; cursor: default;">No products found</div>';
+            suggestions.style.display = 'block';
+            return;
+        }
+        
+        let html = '';
+        matches.forEach((product, index) => {
+            const highlighted = product.replace(
+                new RegExp(`(${input.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'),
+                '<strong>$1</strong>'
+            );
+            const escapedProduct = product.replace(/"/g, '&quot;');
+            html += `<div class="autocomplete-suggestion" data-index="${index}" data-product="${escapedProduct}" onclick="selectProductFromData(this)">${highlighted}</div>`;
+        });
+        suggestions.innerHTML = html;
+        suggestions.style.display = 'block';
+        selectedIndex = -1;
+    }
+    
+    function selectProduct(productName) {
+        input.value = productName;
+        hidden.value = productName;
+        suggestions.style.display = 'none';
+        selectedIndex = -1;
+    }
+    
+    input.addEventListener('input', function() {
+        const query = input.value.trim();
+        const matches = filterProducts(query);
+        showSuggestions(matches);
+    });
+    
+    input.addEventListener('focus', function() {
+        if (input.value.trim().length > 0) {
+            const matches = filterProducts(input.value.trim());
+            showSuggestions(matches);
+        } else {
+            showSuggestions(allProducts.slice(0, 7));
+        }
+    });
+    
+    input.addEventListener('blur', function() {
+        setTimeout(() => {
+            suggestions.style.display = 'none';
+        }, 200);
+    });
+    
+    input.addEventListener('keydown', function(e) {
+        const suggestionElements = suggestions.querySelectorAll('.autocomplete-suggestion');
+        
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            selectedIndex = Math.min(selectedIndex + 1, suggestionElements.length - 1);
+            suggestionElements.forEach((el, idx) => {
+                if (idx === selectedIndex) {
+                    el.classList.add('highlighted');
+                } else {
+                    el.classList.remove('highlighted');
+                }
+            });
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            selectedIndex = Math.max(selectedIndex - 1, -1);
+            suggestionElements.forEach((el, idx) => {
+                if (idx === selectedIndex) {
+                    el.classList.add('highlighted');
+                } else {
+                    el.classList.remove('highlighted');
+                }
+            });
+        } else if (e.key === 'Enter' && selectedIndex >= 0) {
+            e.preventDefault();
+            const selected = suggestionElements[selectedIndex];
+            if (selected && selected.dataset.product) {
+                selectProduct(selected.dataset.product);
+            }
+        } else if (e.key === 'Escape') {
+            suggestions.style.display = 'none';
+            selectedIndex = -1;
+        }
+    });
+}
+
+function selectProductFromData(element) {
+    const productName = element.getAttribute('data-product');
+    const itemElement = element.closest('.invoice-item');
+    const input = itemElement.querySelector('.item-name-input');
+    const hidden = itemElement.querySelector('.item-name-hidden');
+    
+    if (input && hidden) {
+        input.value = productName;
+        hidden.value = productName;
+        itemElement.querySelector('.autocomplete-suggestions').style.display = 'none';
+    }
 }
 
 function updateInvoiceTotal() {
@@ -227,18 +467,24 @@ function createInvoice(event) {
     const items = [];
     const itemRows = document.querySelectorAll('.invoice-item');
     itemRows.forEach(row => {
-        const name = row.querySelector('.item-name').value;
+        const hiddenInput = row.querySelector('.item-name-hidden');
+        const name = hiddenInput ? hiddenInput.value : '';
         const price = parseFloat(row.querySelector('.item-price').value) || 0;
         const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
-        if (name && price > 0 && qty > 0) {
+        if (name && name.trim() && price > 0 && qty > 0) {
             items.push({
-                name: name,
+                name: name.trim(),
                 price: price,
                 quantity: qty,
                 subtotal: price * qty
             });
         }
     });
+    
+    if (items.length === 0) {
+        alert('Please add at least one item with a product name, price, and quantity.');
+        return;
+    }
     
     const totalAmount = items.reduce((sum, item) => sum + item.subtotal, 0);
     
@@ -297,7 +543,7 @@ function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmoun
     alert(message);
 }
 
-// Update total when inputs change
+// Update total when inputs change and initialize autocomplete
 document.addEventListener('DOMContentLoaded', function() {
     const itemsDiv = document.getElementById('invoiceItems');
     if (itemsDiv) {
@@ -306,6 +552,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 updateInvoiceTotal();
             }
         });
+        // Initialize autocomplete for initial item
+        const initialItem = itemsDiv.querySelector('.invoice-item');
+        if (initialItem) {
+            initializeAutocomplete(initialItem);
+        }
     }
 });
 
