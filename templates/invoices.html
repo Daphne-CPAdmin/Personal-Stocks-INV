@@ -16,8 +16,12 @@
                 <tr>
                     <th>Invoice #</th>
                     <th>Customer Name</th>
-                    <th>Products</th>
-                    <th>Total Amount</th>
+                    <th>Product Name</th>
+                    <th>Quantity</th>
+                    <th>Price Per Piece</th>
+                    <th>Subtotal</th>
+                    <th>Shipment/Delivery Fee</th>
+                    <th>Total</th>
                     <th>Date</th>
                     <th>Actions</th>
                 </tr>
@@ -25,34 +29,65 @@
             <tbody>
                 {% if invoices %}
                     {% for invoice in invoices %}
-                    <tr>
-                        <td>{{ invoice.get('invoice_number', 'N/A') }}</td>
-                        <td>{{ invoice.get('customer_name', 'N/A') }}</td>
-                        <td>
-                            {% set items_list = invoice.get('items_parsed', []) %}
-                            {% if items_list %}
-                                {% for item in items_list %}
-                                    <div style="margin-bottom: 0.25rem;">
-                                        <strong>{{ item.get('name', 'N/A') }}</strong>: 
-                                        {{ item.get('quantity', 0) }} pcs × ₱{{ "%.2f"|format(item.get('price', 0)) }} = ₱{{ "%.2f"|format(item.get('subtotal', 0)) }}
-                                    </div>
-                                {% endfor %}
-                            {% else %}
-                                -
-                            {% endif %}
-                        </td>
-                        <td>₱{{ "%.2f"|format(invoice.get('total_amount', 0)) }}</td>
-                        <td>{{ invoice.get('invoice_date', '-') }}</td>
-                        <td>
-                            <button class="btn btn-sm btn-primary" onclick="viewInvoice('{{ invoice.get('invoice_number', '') }}', {{ invoice.get('items_parsed', [])|tojson|safe }}, '{{ invoice.get('customer_name', '') }}', '{{ invoice.get('invoice_date', '') }}', {{ invoice.get('total_amount', 0) }})">
-                                View
-                            </button>
-                        </td>
-                    </tr>
+                        {% set items_list = invoice.get('items_parsed', []) %}
+                        {% set shipment_fee = invoice.get('shipment_fee', 0) %}
+                        {% if shipment_fee is none or shipment_fee == '' %}
+                            {% set shipment_fee = 0 %}
+                        {% else %}
+                            {% set shipment_fee = shipment_fee|float %}
+                        {% endif %}
+                        {% if items_list %}
+                            {% for item in items_list %}
+                            <tr>
+                                {% if loop.first %}
+                                <td rowspan="{{ items_list|length }}" style="vertical-align: top; padding-top: 1rem;">
+                                    <strong>{{ invoice.get('invoice_number', 'N/A') }}</strong>
+                                </td>
+                                <td rowspan="{{ items_list|length }}" style="vertical-align: top; padding-top: 1rem;">
+                                    {{ invoice.get('customer_name', 'N/A') }}
+                                </td>
+                                {% endif %}
+                                <td>{{ item.get('name', 'N/A') }}</td>
+                                <td>{{ item.get('quantity', 0) }}</td>
+                                <td>₱{{ "%.2f"|format(item.get('price', 0)) }}</td>
+                                <td>₱{{ "%.2f"|format(item.get('subtotal', 0)) }}</td>
+                                {% if loop.first %}
+                                <td rowspan="{{ items_list|length }}" style="vertical-align: top; padding-top: 1rem;">
+                                    ₱{{ "%.2f"|format(shipment_fee) }}
+                                </td>
+                                <td rowspan="{{ items_list|length }}" style="vertical-align: top; padding-top: 1rem;">
+                                    <strong>₱{{ "%.2f"|format(invoice.get('total_amount', 0)) }}</strong>
+                                </td>
+                                <td rowspan="{{ items_list|length }}" style="vertical-align: top; padding-top: 1rem;">
+                                    {{ invoice.get('invoice_date', '-') }}
+                                </td>
+                                <td rowspan="{{ items_list|length }}" style="vertical-align: top; padding-top: 1rem;">
+                                    <button class="btn btn-sm btn-primary" onclick="viewInvoice('{{ invoice.get('invoice_number', '') }}', {{ invoice.get('items_parsed', [])|tojson|safe }}, '{{ invoice.get('customer_name', '') }}', '{{ invoice.get('invoice_date', '') }}', {{ invoice.get('total_amount', 0) }}, {{ shipment_fee }})">
+                                        View
+                                    </button>
+                                </td>
+                                {% endif %}
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td>{{ invoice.get('invoice_number', 'N/A') }}</td>
+                                <td>{{ invoice.get('customer_name', 'N/A') }}</td>
+                                <td colspan="4" class="text-center">No items</td>
+                                <td>₱{{ "%.2f"|format(shipment_fee) }}</td>
+                                <td><strong>₱{{ "%.2f"|format(invoice.get('total_amount', 0)) }}</strong></td>
+                                <td>{{ invoice.get('invoice_date', '-') }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary" onclick="viewInvoice('{{ invoice.get('invoice_number', '') }}', [], '{{ invoice.get('customer_name', '') }}', '{{ invoice.get('invoice_date', '') }}', {{ invoice.get('total_amount', 0) }}, {{ shipment_fee }})">
+                                        View
+                                    </button>
+                                </td>
+                            </tr>
+                        {% endif %}
                     {% endfor %}
                 {% else %}
                     <tr>
-                        <td colspan="6" class="text-center">No invoices yet. Create your first invoice!</td>
+                        <td colspan="10" class="text-center">No invoices yet. Create your first invoice!</td>
                     </tr>
                 {% endif %}
             </tbody>
@@ -152,8 +187,25 @@
                 <button type="button" class="btn btn-secondary" onclick="addInvoiceItem()">+ Add Item</button>
             </div>
             
+            <div class="form-group" style="margin-top: 1.5rem;">
+                <label>Shipment/Delivery Fee (₱)</label>
+                <input type="number" step="0.01" name="shipment_fee" id="shipmentFee" value="0" placeholder="0.00" oninput="updateInvoiceTotal()" style="max-width: 200px;">
+                <small style="display: block; color: #666; margin-top: 0.25rem;">Optional shipping or delivery fee</small>
+            </div>
+            
             <div class="invoice-total">
-                <strong>Total: ₱<span id="invoiceTotal">0.00</span></strong>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span>Subtotal:</span>
+                    <span>₱<span id="invoiceSubtotal">0.00</span></span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span>Shipment/Delivery Fee:</span>
+                    <span>₱<span id="shipmentFeeDisplay">0.00</span></span>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding-top: 0.5rem; border-top: 2px solid #6366f1; margin-top: 0.5rem;">
+                    <strong>Total:</strong>
+                    <strong>₱<span id="invoiceTotal">0.00</span></strong>
+                </div>
             </div>
             
             <div class="form-actions">
@@ -448,12 +500,18 @@ function selectProductFromData(element) {
 
 function updateInvoiceTotal() {
     const items = document.querySelectorAll('.invoice-item');
-    let total = 0;
+    let subtotal = 0;
     items.forEach(item => {
         const price = parseFloat(item.querySelector('.item-price').value) || 0;
         const qty = parseFloat(item.querySelector('.item-qty').value) || 0;
-        total += price * qty;
+        subtotal += price * qty;
     });
+    
+    const shipmentFee = parseFloat(document.getElementById('shipmentFee').value) || 0;
+    const total = subtotal + shipmentFee;
+    
+    document.getElementById('invoiceSubtotal').textContent = subtotal.toFixed(2);
+    document.getElementById('shipmentFeeDisplay').textContent = shipmentFee.toFixed(2);
     document.getElementById('invoiceTotal').textContent = total.toFixed(2);
 }
 
@@ -486,7 +544,9 @@ function createInvoice(event) {
         return;
     }
     
-    const totalAmount = items.reduce((sum, item) => sum + item.subtotal, 0);
+    const shipmentFee = parseFloat(document.getElementById('shipmentFee').value) || 0;
+    const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
+    const totalAmount = subtotal + shipmentFee;
     
     fetch('/api/create_invoice', {
         method: 'POST',
@@ -494,6 +554,8 @@ function createInvoice(event) {
         body: JSON.stringify({
             customer_name: customerName,
             items: items,
+            subtotal: subtotal,
+            shipment_fee: shipmentFee,
             total_amount: totalAmount,
             invoice_date: invoiceDate
         })
@@ -512,7 +574,7 @@ function createInvoice(event) {
     });
 }
 
-function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmount) {
+function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmount, shipmentFee) {
     let itemsList = [];
     try {
         if (typeof items === 'string') {
@@ -530,13 +592,19 @@ function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmoun
     message += `ITEMS:\n`;
     message += '─'.repeat(50) + '\n';
     
+    let subtotal = 0;
     itemsList.forEach((item, index) => {
         message += `${index + 1}. ${item.name}\n`;
         message += `   Quantity: ${item.quantity} pcs\n`;
         message += `   Price per unit: ₱${parseFloat(item.price).toFixed(2)}\n`;
         message += `   Subtotal: ₱${parseFloat(item.subtotal).toFixed(2)}\n\n`;
+        subtotal += parseFloat(item.subtotal || 0);
     });
     
+    shipmentFee = shipmentFee || 0;
+    message += '─'.repeat(50) + '\n';
+    message += `Subtotal: ₱${subtotal.toFixed(2)}\n`;
+    message += `Shipment/Delivery Fee: ₱${parseFloat(shipmentFee).toFixed(2)}\n`;
     message += '─'.repeat(50) + '\n';
     message += `TOTAL AMOUNT: ₱${parseFloat(totalAmount).toFixed(2)}`;
     

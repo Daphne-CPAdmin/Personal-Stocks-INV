@@ -493,6 +493,7 @@ def create_invoice():
         data = request.json
         customer_name = data.get('customer_name')
         items = data.get('items', [])
+        shipment_fee = float(data.get('shipment_fee', 0))
         total_amount = float(data.get('total_amount', 0))
         invoice_date = data.get('invoice_date', datetime.now().strftime('%Y-%m-%d'))
         
@@ -502,6 +503,7 @@ def create_invoice():
             'invoice_number': invoice_number,
             'customer_name': customer_name,
             'items': str(items),  # Store as string representation
+            'shipment_fee': shipment_fee,
             'total_amount': total_amount,
             'invoice_date': invoice_date,
             'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -511,7 +513,7 @@ def create_invoice():
             df = connector.read_from_sheets(INVOICES_SHEET_URL)
             # Handle empty DataFrame
             if df.empty:
-                df = pd.DataFrame(columns=['invoice_number', 'customer_name', 'items', 'total_amount', 'invoice_date', 'created_at'])
+                df = pd.DataFrame(columns=['invoice_number', 'customer_name', 'items', 'shipment_fee', 'total_amount', 'invoice_date', 'created_at'])
             new_invoice_df = pd.DataFrame([new_invoice])
             df = pd.concat([df, new_invoice_df], ignore_index=True)
             connector.write_to_sheets(df, INVOICES_SHEET_URL)
