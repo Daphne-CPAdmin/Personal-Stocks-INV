@@ -9,6 +9,9 @@ from data_sources import DataConnector
 # Load environment variables
 load_dotenv()
 
+# Create necessary directories before setting up logging
+os.makedirs('logs', exist_ok=True)
+
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 
