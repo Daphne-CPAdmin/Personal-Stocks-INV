@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Used/Freebie Items - Inventory Manager{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Used & Freebie Items</h2>
+</div>
+
+<div class="card">
+    <h3>Used Items</h3>
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Product Name</th>
+                    <th>Quantity</th>
+                    <th>Cost Per Unit</th>
+                    <th>Total Cost</th>
+                    <th>Date Used</th>
+                    <th>Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if used_items %}
+                    {% for item in used_items %}
+                    <tr>
+                        <td>{{ item.get('product_name', 'N/A') }}</td>
+                        <td>{{ item.get('quantity', 0) }}</td>
+                        <td>₱{{ "%.2f"|format(item.get('total_cost_per_unit', 0)) }}</td>
+                        <td>₱{{ "%.2f"|format(item.get('quantity', 0) * item.get('total_cost_per_unit', 0)) }}</td>
+                        <td>{{ item.get('date_used', '-') }}</td>
+                        <td>{{ item.get('remarks', '-') }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center">No used items yet.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <h3>Freebie Items</h3>
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Product Name</th>
+                    <th>Quantity</th>
+                    <th>Cost Per Unit</th>
+                    <th>Total Cost</th>
+                    <th>Date Given</th>
+                    <th>Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if freebie_items %}
+                    {% for item in freebie_items %}
+                    <tr>
+                        <td>{{ item.get('product_name', 'N/A') }}</td>
+                        <td>{{ item.get('quantity', 0) }}</td>
+                        <td>₱{{ "%.2f"|format(item.get('total_cost_per_unit', 0)) }}</td>
+                        <td>₱{{ "%.2f"|format(item.get('quantity', 0) * item.get('total_cost_per_unit', 0)) }}</td>
+                        <td>{{ item.get('date_used', '-') }}</td>
+                        <td>{{ item.get('remarks', '-') }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center">No freebie items yet.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+

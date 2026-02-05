@@ -1,0 +1,24 @@
+# Copy this file to .env and fill in your values
+
+# Flask Secret Key (change this in production!)
+SECRET_KEY=your-secret-key-here-change-in-production
+
+# Google Sheets URLs
+# Copy the full URL from your browser when viewing each sheet tab
+INVENTORY_SHEET_URL=https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=0
+SOLD_ITEMS_SHEET_URL=https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=123456
+INVOICES_SHEET_URL=https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=234567
+CUSTOMERS_SHEET_URL=https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=345678
+USED_FREEBIE_SHEET_URL=https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=567890
+INDEX_SHEET_URL=https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit#gid=456789
+
+# Google Service Account Credentials
+# Option 1: Path to credentials JSON file (for local development)
+GOOGLE_CREDENTIALS_PATH=credentials.json
+
+# Option 2: JSON credentials as environment variable (for Railway deployment)
+# Paste the entire JSON content here (single line, no quotes)
+# GOOGLE_CREDENTIALS_JSON={"type":"service_account","project_id":"..."}
+
+# Railway Port (automatically set by Railway)
+PORT=5000

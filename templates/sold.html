@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}Sold Items - Inventory Manager{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Sold Items & Tithe Tracking</h2>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <h3>Total Profit</h3>
+        <p class="stat-value">₱{{ "%.2f"|format(total_profit) }}</p>
+    </div>
+    <div class="stat-card">
+        <h3>Total Tithe</h3>
+        <p class="stat-value">₱{{ "%.2f"|format(total_tithe) }}</p>
+    </div>
+    <div class="stat-card">
+        <h3>Profit After Tithe</h3>
+        <p class="stat-value">₱{{ "%.2f"|format(total_profit_after_tithe) }}</p>
+    </div>
+    <div class="stat-card">
+        <h3>Tithe Kept</h3>
+        <p class="stat-value">₱{{ "%.2f"|format(tithe_kept_total) }}</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Product Name</th>
+                    <th>Quantity</th>
+                    <th>Cost Per Unit</th>
+                    <th>Selling Price</th>
+                    <th>Total Cost</th>
+                    <th>Profit</th>
+                    <th>Tithe (10%)</th>
+                    <th>Profit After Tithe</th>
+                    <th>Tithe Kept</th>
+                    <th>Date Sold</th>
+                    <th>Remarks</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if items %}
+                    {% for item in items %}
+                    <tr>
+                        <td>{{ item.get('product_name', 'N/A') }}</td>
+                        <td>{{ item.get('quantity', 0) }}</td>
+                        <td>₱{{ "%.2f"|format(item.get('total_cost_per_unit', 0)) }}</td>
+                        <td>₱{{ "%.2f"|format(item.get('selling_price', 0)) }}</td>
+                        <td>₱{{ "%.2f"|format(item.get('total_cost', 0)) }}</td>
+                        <td>₱{{ "%.2f"|format(item.get('profit', 0)) }}</td>
+                        <td>₱{{ "%.2f"|format(item.get('tithe', 0)) }}</td>
+                        <td>₱{{ "%.2f"|format(item.get('profit_after_tithe', 0)) }}</td>
+                        <td>
+                            <label class="checkbox-label">
+                                <input type="checkbox" 
+                                       {% if item.get('tithe_kept') == True or item.get('tithe_kept') == 'True' or item.get('tithe_kept') == 'true' %}checked{% endif %}
+                                       onchange="updateTitheStatus({{ loop.index0 }}, this.checked)">
+                                <span>Kept</span>
+                            </label>
+                        </td>
+                        <td>{{ item.get('date_sold', '-') }}</td>
+                        <td>{{ item.get('remarks', '-') }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" onclick="viewInvoice('{{ item.get('product_name', '') }}')">
+                                View Details
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="12" class="text-center">No sold items yet.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateTitheStatus(itemId, titheKept) {
+    fetch('/api/update_tithe_status', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            item_id: itemId,
+            tithe_kept: titheKept
+        })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            // Update stats without reload
+            location.reload();
+        } else {
+            alert('Error: ' + result.message);
+        }
+    })
+    .catch(error => {
+        alert('Error: ' + error);
+    });
+}
+
+function viewInvoice(productName) {
+    alert('Product: ' + productName + '\n\nInvoice details feature coming soon!');
+}
+</script>
+{% endblock %}
+

@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+
+{% block title %}Invoices - Inventory Manager{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Invoice Management</h2>
+    <button class="btn btn-primary" onclick="openCreateInvoiceModal()">+ Create Invoice</button>
+</div>
+
+<div class="card">
+    <h3>Recent Invoices</h3>
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Invoice #</th>
+                    <th>Customer Name</th>
+                    <th>Products</th>
+                    <th>Total Amount</th>
+                    <th>Date</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if invoices %}
+                    {% for invoice in invoices %}
+                    <tr>
+                        <td>{{ invoice.get('invoice_number', 'N/A') }}</td>
+                        <td>{{ invoice.get('customer_name', 'N/A') }}</td>
+                        <td>
+                            {% set items_list = invoice.get('items_parsed', []) %}
+                            {% if items_list %}
+                                {% for item in items_list %}
+                                    <div style="margin-bottom: 0.25rem;">
+                                        <strong>{{ item.get('name', 'N/A') }}</strong>: 
+                                        {{ item.get('quantity', 0) }} pcs × ₱{{ "%.2f"|format(item.get('price', 0)) }} = ₱{{ "%.2f"|format(item.get('subtotal', 0)) }}
+                                    </div>
+                                {% endfor %}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>₱{{ "%.2f"|format(invoice.get('total_amount', 0)) }}</td>
+                        <td>{{ invoice.get('invoice_date', '-') }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" onclick="viewInvoice('{{ invoice.get('invoice_number', '') }}', {{ invoice.get('items_parsed', [])|tojson|safe }}, '{{ invoice.get('customer_name', '') }}', '{{ invoice.get('invoice_date', '') }}', {{ invoice.get('total_amount', 0) }})">
+                                View
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center">No invoices yet. Create your first invoice!</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <h3>Customers</h3>
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Customer Name</th>
+                    <th>Total Orders</th>
+                    <th>Total Spent</th>
+                    <th>Products Purchased</th>
+                    <th>First Order</th>
+                    <th>Last Order</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if customers %}
+                    {% for customer in customers %}
+                    <tr>
+                        <td>{{ customer.get('customer_name', 'N/A') }}</td>
+                        <td>{{ customer.get('total_orders', 0) }}</td>
+                        <td>₱{{ "%.2f"|format(customer.get('total_spent', 0)) }}</td>
+                        <td>
+                            {% set products_dict = customer.get('products_parsed', {}) %}
+                            {% if products_dict %}
+                                {% for product_name, details in products_dict.items() %}
+                                    <div style="margin-bottom: 0.25rem;">
+                                        <strong>{{ product_name }}</strong>: 
+                                        {{ details.get('qty', 0) }} pcs sold, Total: ₱{{ "%.2f"|format(details.get('total_amount', 0)) }}
+                                    </div>
+                                {% endfor %}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>{{ customer.get('first_order_date', '-') }}</td>
+                        <td>{{ customer.get('last_order_date', '-') }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center">No customers yet.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Create Invoice Modal -->
+<div id="createInvoiceModal" class="modal">
+    <div class="modal-content modal-large">
+        <span class="close" onclick="closeCreateInvoiceModal()">&times;</span>
+        <h3>Create New Invoice</h3>
+        <form id="createInvoiceForm" onsubmit="createInvoice(event)">
+            <div class="form-group">
+                <label>Customer Name *</label>
+                <input type="text" name="customer_name" id="customerName" required list="customerList">
+                <datalist id="customerList">
+                    {% for customer in customers %}
+                    <option value="{{ customer.get('customer_name', '') }}">
+                    {% endfor %}
+                </datalist>
+            </div>
+            <div class="form-group">
+                <label>Invoice Date</label>
+                <input type="date" name="invoice_date" value="{{ today }}" required>
+            </div>
+            
+            <div class="invoice-items-section">
+                <h4>Items</h4>
+                <div id="invoiceItems">
+                    <div class="invoice-item">
+                        <select class="item-name" required>
+                            <option value="">-- Select Product --</option>
+                            {% if product_names %}
+                                {% for product_name in product_names %}
+                                <option value="{{ product_name }}">{{ product_name }}</option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                        <input type="number" step="0.01" placeholder="Price (₱)" class="item-price" required>
+                        <input type="number" placeholder="Qty" class="item-qty" value="1" required>
+                        <button type="button" class="btn btn-sm btn-danger" onclick="removeItem(this)">Remove</button>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-secondary" onclick="addInvoiceItem()">+ Add Item</button>
+            </div>
+            
+            <div class="invoice-total">
+                <strong>Total: ₱<span id="invoiceTotal">0.00</span></strong>
+            </div>
+            
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeCreateInvoiceModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Create Invoice</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let invoiceItems = [];
+
+function openCreateInvoiceModal() {
+    document.getElementById('createInvoiceModal').style.display = 'block';
+    invoiceItems = [];
+    updateInvoiceTotal();
+}
+
+function closeCreateInvoiceModal() {
+    document.getElementById('createInvoiceModal').style.display = 'none';
+    document.getElementById('createInvoiceForm').reset();
+    const productOptions = {% if product_names %}{{ product_names|tojson }}{% else %}[]{% endif %};
+    let optionsHtml = '<option value="">-- Select Product --</option>';
+    productOptions.forEach(name => {
+        optionsHtml += `<option value="${name}">${name}</option>`;
+    });
+    document.getElementById('invoiceItems').innerHTML = `<div class="invoice-item"><select class="item-name" required>${optionsHtml}</select><input type="number" step="0.01" placeholder="Price (₱)" class="item-price" required><input type="number" placeholder="Qty" class="item-qty" value="1" required><button type="button" class="btn btn-sm btn-danger" onclick="removeItem(this)">Remove</button></div>`;
+    invoiceItems = [];
+}
+
+function addInvoiceItem() {
+    const itemsDiv = document.getElementById('invoiceItems');
+    const productOptions = {% if product_names %}{{ product_names|tojson }}{% else %}[]{% endif %};
+    let optionsHtml = '<option value="">-- Select Product --</option>';
+    productOptions.forEach(name => {
+        optionsHtml += `<option value="${name}">${name}</option>`;
+    });
+    const newItem = document.createElement('div');
+    newItem.className = 'invoice-item';
+    newItem.innerHTML = `
+        <select class="item-name" required>${optionsHtml}</select>
+        <input type="number" step="0.01" placeholder="Price (₱)" class="item-price" required oninput="updateInvoiceTotal()">
+        <input type="number" placeholder="Qty" class="item-qty" value="1" required oninput="updateInvoiceTotal()">
+        <button type="button" class="btn btn-sm btn-danger" onclick="removeItem(this)">Remove</button>
+    `;
+    itemsDiv.appendChild(newItem);
+}
+
+function removeItem(button) {
+    button.parentElement.remove();
+    updateInvoiceTotal();
+}
+
+function updateInvoiceTotal() {
+    const items = document.querySelectorAll('.invoice-item');
+    let total = 0;
+    items.forEach(item => {
+        const price = parseFloat(item.querySelector('.item-price').value) || 0;
+        const qty = parseFloat(item.querySelector('.item-qty').value) || 0;
+        total += price * qty;
+    });
+    document.getElementById('invoiceTotal').textContent = total.toFixed(2);
+}
+
+function createInvoice(event) {
+    event.preventDefault();
+    const formData = new FormData(event.target);
+    const customerName = formData.get('customer_name');
+    const invoiceDate = formData.get('invoice_date');
+    
+    // Collect items
+    const items = [];
+    const itemRows = document.querySelectorAll('.invoice-item');
+    itemRows.forEach(row => {
+        const name = row.querySelector('.item-name').value;
+        const price = parseFloat(row.querySelector('.item-price').value) || 0;
+        const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+        if (name && price > 0 && qty > 0) {
+            items.push({
+                name: name,
+                price: price,
+                quantity: qty,
+                subtotal: price * qty
+            });
+        }
+    });
+    
+    const totalAmount = items.reduce((sum, item) => sum + item.subtotal, 0);
+    
+    fetch('/api/create_invoice', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            customer_name: customerName,
+            items: items,
+            total_amount: totalAmount,
+            invoice_date: invoiceDate
+        })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert('Invoice created successfully! Invoice #: ' + result.invoice_number);
+            location.reload();
+        } else {
+            alert('Error: ' + result.message);
+        }
+    })
+    .catch(error => {
+        alert('Error: ' + error);
+    });
+}
+
+function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmount) {
+    let itemsList = [];
+    try {
+        if (typeof items === 'string') {
+            itemsList = JSON.parse(items);
+        } else {
+            itemsList = items;
+        }
+    } catch(e) {
+        itemsList = [];
+    }
+    
+    let message = `INVOICE #${invoiceNumber}\n`;
+    message += `Customer: ${customerName}\n`;
+    message += `Date: ${invoiceDate}\n\n`;
+    message += `ITEMS:\n`;
+    message += '─'.repeat(50) + '\n';
+    
+    itemsList.forEach((item, index) => {
+        message += `${index + 1}. ${item.name}\n`;
+        message += `   Quantity: ${item.quantity} pcs\n`;
+        message += `   Price per unit: ₱${parseFloat(item.price).toFixed(2)}\n`;
+        message += `   Subtotal: ₱${parseFloat(item.subtotal).toFixed(2)}\n\n`;
+    });
+    
+    message += '─'.repeat(50) + '\n';
+    message += `TOTAL AMOUNT: ₱${parseFloat(totalAmount).toFixed(2)}`;
+    
+    alert(message);
+}
+
+// Update total when inputs change
+document.addEventListener('DOMContentLoaded', function() {
+    const itemsDiv = document.getElementById('invoiceItems');
+    if (itemsDiv) {
+        itemsDiv.addEventListener('input', function(e) {
+            if (e.target.classList.contains('item-price') || e.target.classList.contains('item-qty')) {
+                updateInvoiceTotal();
+            }
+        });
+    }
+});
+
+window.onclick = function(event) {
+    const modal = document.getElementById('createInvoiceModal');
+    if (event.target == modal) {
+        closeCreateInvoiceModal();
+    }
+}
+</script>
+{% endblock %}
+
+
