@@ -101,6 +101,14 @@ body {
     transform: translateY(0);
 }
 
+.nav-link.active {
+    background: rgba(255, 255, 255, 0.25);
+    color: white;
+    border-color: rgba(255, 255, 255, 0.4);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    font-weight: 700;
+}
+
 .main-content {
     max-width: 1200px;
     margin: 2rem auto;
