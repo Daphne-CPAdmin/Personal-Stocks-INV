@@ -281,6 +281,31 @@ def update_tithe_status():
         logger.error(f"Error updating tithe status: {str(e)}")
         return jsonify({'success': False, 'message': str(e)}), 400
 
+@app.route('/used_freebie')
+def used_freebie():
+    """Used and Freebie items page"""
+    try:
+        if USED_FREEBIE_SHEET_URL:
+            df = connector.read_from_sheets(USED_FREEBIE_SHEET_URL)
+            used_items = df.to_dict('records') if not df.empty else []
+        else:
+            used_items = []
+    except Exception as e:
+        logger.error(f"Error loading used/freebie items: {str(e)}", exc_info=True)
+        used_items = []
+        flash(f"Error loading used/freebie items: {str(e)}", "error")
+    
+    # Separate used and freebie
+    try:
+        used = [item for item in used_items if item.get('status', '').lower() == 'used']
+        freebie = [item for item in used_items if item.get('status', '').lower() == 'freebie']
+    except Exception as e:
+        logger.error(f"Error processing used/freebie items: {str(e)}", exc_info=True)
+        used = []
+        freebie = []
+    
+    return render_template('used_freebie.html', used_items=used, freebie_items=freebie)
+
 @app.route('/invoices')
 def invoices():
     """Invoice creation page"""
