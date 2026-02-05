@@ -16,10 +16,7 @@
                 <tr>
                     <th>Invoice #</th>
                     <th>Customer Name</th>
-                    <th>Product Name</th>
-                    <th>Quantity</th>
-                    <th>Price Per Piece</th>
-                    <th>Subtotal</th>
+                    <th>Products</th>
                     <th>Shipment/Delivery Fee</th>
                     <th>Total</th>
                     <th>Date</th>
@@ -36,68 +33,41 @@
                         {% else %}
                             {% set shipment_fee = shipment_fee|float %}
                         {% endif %}
-                        {% if items_list %}
-                            {% for item in items_list %}
-                            <tr>
-                                {% if loop.first %}
-                                <td rowspan="{{ items_list|length }}" style="vertical-align: top; padding-top: 1rem;">
-                                    <strong>{{ invoice.get('invoice_number', 'N/A') }}</strong>
-                                </td>
-                                <td rowspan="{{ items_list|length }}" style="vertical-align: top; padding-top: 1rem;">
-                                    {{ invoice.get('customer_name', 'N/A') }}
-                                </td>
-                                {% endif %}
-                                <td>{{ item.get('name', 'N/A') }}</td>
-                                <td>{{ item.get('quantity', 0) }}</td>
-                                <td>₱{{ "%.2f"|format(item.get('price', 0)) }}</td>
-                                <td>₱{{ "%.2f"|format(item.get('subtotal', 0)) }}</td>
-                                {% if loop.first %}
-                                <td rowspan="{{ items_list|length }}" style="vertical-align: top; padding-top: 1rem;">
-                                    ₱{{ "%.2f"|format(shipment_fee) }}
-                                </td>
-                                <td rowspan="{{ items_list|length }}" style="vertical-align: top; padding-top: 1rem;">
-                                    <strong>₱{{ "%.2f"|format(invoice.get('total_amount', 0)) }}</strong>
-                                </td>
-                                <td rowspan="{{ items_list|length }}" style="vertical-align: top; padding-top: 1rem;">
-                                    {{ invoice.get('invoice_date', '-') }}
-                                </td>
-                                <td rowspan="{{ items_list|length }}" style="vertical-align: top; padding-top: 1rem;">
-                                    <div style="display: flex; gap: 0.5rem; flex-direction: column;">
-                                        <button class="btn btn-sm btn-primary" onclick="viewInvoice('{{ invoice.get('invoice_number', '') }}', {{ invoice.get('items_parsed', [])|tojson|safe }}, '{{ invoice.get('customer_name', '') }}', '{{ invoice.get('invoice_date', '') }}', {{ invoice.get('total_amount', 0) }}, {{ shipment_fee }})">
-                                            View
-                                        </button>
-                                        <button class="btn btn-sm btn-danger" onclick="deleteInvoice('{{ invoice.get('invoice_number', '') }}')">
-                                            Delete
-                                        </button>
+                        <tr>
+                            <td><strong>{{ invoice.get('invoice_number', 'N/A') }}</strong></td>
+                            <td>{{ invoice.get('customer_name', 'N/A') }}</td>
+                            <td>
+                                {% if items_list %}
+                                    <div style="max-width: 400px;">
+                                        {% for item in items_list %}
+                                            <div style="margin-bottom: 0.25rem; font-size: 0.875rem;">
+                                                <strong>{{ item.get('name', 'N/A') }}</strong> 
+                                                ({{ item.get('quantity', 0) }} pcs × ₱{{ "%.2f"|format(item.get('price', 0)) }})
+                                            </div>
+                                        {% endfor %}
                                     </div>
-                                </td>
+                                {% else %}
+                                    <span class="text-muted">No items</span>
                                 {% endif %}
-                            </tr>
-                            {% endfor %}
-                        {% else %}
-                            <tr>
-                                <td>{{ invoice.get('invoice_number', 'N/A') }}</td>
-                                <td>{{ invoice.get('customer_name', 'N/A') }}</td>
-                                <td colspan="4" class="text-center">No items</td>
-                                <td>₱{{ "%.2f"|format(shipment_fee) }}</td>
-                                <td><strong>₱{{ "%.2f"|format(invoice.get('total_amount', 0)) }}</strong></td>
-                                <td>{{ invoice.get('invoice_date', '-') }}</td>
-                                <td>
-                                    <div style="display: flex; gap: 0.5rem; flex-direction: column;">
-                                        <button class="btn btn-sm btn-primary" onclick="viewInvoice('{{ invoice.get('invoice_number', '') }}', [], '{{ invoice.get('customer_name', '') }}', '{{ invoice.get('invoice_date', '') }}', {{ invoice.get('total_amount', 0) }}, {{ shipment_fee }})">
-                                            View
-                                        </button>
-                                        <button class="btn btn-sm btn-danger" onclick="deleteInvoice('{{ invoice.get('invoice_number', '') }}')">
-                                            Delete
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        {% endif %}
+                            </td>
+                            <td>₱{{ "%.2f"|format(shipment_fee) }}</td>
+                            <td><strong>₱{{ "%.2f"|format(invoice.get('total_amount', 0)) }}</strong></td>
+                            <td>{{ invoice.get('invoice_date', '-') }}</td>
+                            <td>
+                                <div style="display: flex; gap: 0.5rem; flex-direction: column;">
+                                    <button class="btn btn-sm btn-primary" onclick="viewInvoice('{{ invoice.get('invoice_number', '') }}', {{ invoice.get('items_parsed', [])|tojson|safe }}, '{{ invoice.get('customer_name', '') }}', '{{ invoice.get('invoice_date', '') }}', {{ invoice.get('total_amount', 0) }}, {{ shipment_fee }})">
+                                        View
+                                    </button>
+                                    <button class="btn btn-sm btn-danger" onclick="deleteInvoice('{{ invoice.get('invoice_number', '') }}')">
+                                        Delete
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
                     {% endfor %}
                 {% else %}
                     <tr>
-                        <td colspan="10" class="text-center">No invoices yet. Create your first invoice!</td>
+                        <td colspan="7" class="text-center">No invoices yet. Create your first invoice!</td>
                     </tr>
                 {% endif %}
             </tbody>
