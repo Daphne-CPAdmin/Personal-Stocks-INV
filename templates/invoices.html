@@ -37,12 +37,12 @@
                             <td><strong>{{ invoice.get('invoice_number', 'N/A') }}</strong></td>
                             <td>{{ invoice.get('customer_name', 'N/A') }}</td>
                             <td>
-                                {% if items_list %}
-                                    <div style="max-width: 400px;">
-                                        {% for item in items_list %}
-                                            <div style="margin-bottom: 0.25rem; font-size: 0.875rem;">
-                                                <strong>{{ item.get('name', 'N/A') }}</strong> 
-                                                ({{ item.get('quantity', 0) }} pcs × ₱{{ "%.2f"|format(item.get('price', 0)) }})
+                                {% set products_summary = invoice.get('products', '') %}
+                                {% if products_summary and products_summary != 'No items' %}
+                                    <div style="max-width: 500px; font-size: 0.875rem; line-height: 1.6;">
+                                        {% for product_line in products_summary.split('; ') %}
+                                            <div style="margin-bottom: 0.25rem;">
+                                                {{ product_line }}
                                             </div>
                                         {% endfor %}
                                     </div>
