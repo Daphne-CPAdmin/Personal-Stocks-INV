@@ -17,10 +17,10 @@
                     <th>Total Price</th>
                     <th>Shipping Admin Fee</th>
                     <th>Total Cost/Unit</th>
+                    <th>Quantity</th>
                     <th>Total Bought</th>
                     <th>Remaining</th>
-                    <th>Status</th>
-                    <th>Remarks</th>
+                    <th>Date Added</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -32,6 +32,7 @@
                         <td>₱{{ "%.2f"|format(item.get('total_price', 0)) }}</td>
                         <td>₱{{ "%.2f"|format(item.get('shipping_admin_fee', 0)) }}</td>
                         <td>₱{{ "%.2f"|format(item.get('total_cost_per_unit', 0)) }}</td>
+                        <td>{{ item.get('quantity', 0) }}</td>
                         <td>{{ item.get('total_bought_quantity', item.get('quantity', 0)) }}</td>
                         <td>
                             {% set remaining = item.get('remaining_qty', item.get('quantity', 0)) %}
@@ -44,14 +45,9 @@
                                 <span style="min-width: 40px; text-align: right; font-weight: 600;">{{ remaining }}</span>
                             </div>
                         </td>
+                        <td>{{ item.get('date_added', '-') }}</td>
                         <td>
-                            <span class="status-badge status-{{ item.get('status', 'in_stock') }}">
-                                {{ item.get('status', 'in_stock').replace('_', ' ').title() }}
-                            </span>
-                        </td>
-                        <td>{{ item.get('remarks', '-') }}</td>
-                        <td>
-                            <button class="btn btn-sm btn-secondary" onclick="openStatusModal({{ loop.index0 }}, '{{ item.get('product_name', '') }}', '{{ item.get('status', 'in_stock') }}', {{ item.get('remaining_qty', item.get('quantity', 0)) }})">
+                            <button class="btn btn-sm btn-secondary" onclick="openStatusModal({{ loop.index0 }}, '{{ item.get('product_name', '') }}', 'in_stock', {{ item.get('remaining_qty', item.get('quantity', 0)) }})">
                                 Update Status
                             </button>
                         </td>

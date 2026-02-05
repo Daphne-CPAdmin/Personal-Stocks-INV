@@ -64,15 +64,18 @@ def inventory():
         inventory_items = []
         flash(f"Error loading inventory: {str(e)}", "error")
     
-    # Load product names from INDEX sheet column A for dropdown
+    # Load product names from INDEX sheet product_name column for dropdown
     product_names = []
     try:
         if INDEX_SHEET_URL:
             index_df = connector.read_from_sheets(INDEX_SHEET_URL)
-            # Get product names from column A (first column)
+            # Get product names from product_name column (or first column if column doesn't exist)
             if not index_df.empty:
-                # Use first column (column A)
-                product_names = index_df.iloc[:, 0].dropna().unique().tolist()
+                if 'product_name' in index_df.columns:
+                    product_names = index_df['product_name'].dropna().unique().tolist()
+                else:
+                    # Fallback to first column if product_name column doesn't exist
+                    product_names = index_df.iloc[:, 0].dropna().unique().tolist()
                 # Filter out empty strings
                 product_names = [p for p in product_names if str(p).strip()]
     except Exception as e:
@@ -90,8 +93,6 @@ def add_product():
         total_price = float(data.get('total_price', 0))
         shipping_admin_fee = float(data.get('shipping_admin_fee', 0))
         quantity = int(data.get('quantity', 1))
-        remarks = data.get('remarks', '')
-        status = data.get('status', 'in_stock')
         
         # Calculate total cost per unit: (total_price + shipping_admin_fee) / quantity
         total_cost_per_unit = (total_price + shipping_admin_fee) / quantity if quantity > 0 else 0
@@ -106,17 +107,15 @@ def add_product():
             'quantity': quantity,
             'total_bought_quantity': total_bought_quantity,
             'remaining_qty': remaining_qty,
-            'status': status,
-            'remarks': remarks,
             'date_added': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
         
         if INVENTORY_SHEET_URL:
             # Read existing data
             df = connector.read_from_sheets(INVENTORY_SHEET_URL)
-            # Handle empty DataFrame - ensure all columns exist
+            # Handle empty DataFrame - ensure all columns exist (matching your spreadsheet structure)
             if df.empty:
-                df = pd.DataFrame(columns=['product_name', 'total_price', 'shipping_admin_fee', 'total_cost_per_unit', 'quantity', 'total_bought_quantity', 'remaining_qty', 'status', 'remarks', 'date_added'])
+                df = pd.DataFrame(columns=['product_name', 'total_price', 'shipping_admin_fee', 'total_cost_per_unit', 'quantity', 'total_bought_quantity', 'remaining_qty', 'date_added'])
             else:
                 # Ensure new columns exist in existing DataFrame
                 if 'total_bought_quantity' not in df.columns:
