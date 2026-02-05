@@ -71,14 +71,18 @@
         <form id="addProductForm" onsubmit="addProduct(event)">
             <div class="form-group">
                 <label>Product Name *</label>
-                <select name="product_name" id="productNameSelect" required>
-                    <option value="">-- Select Product --</option>
-                    {% if product_names %}
-                        {% for product_name in product_names %}
-                        <option value="{{ product_name }}">{{ product_name }}</option>
-                        {% endfor %}
-                    {% endif %}
-                </select>
+                <div style="position: relative;">
+                    <input type="text" 
+                           id="productNameInput" 
+                           placeholder="Type to search products..." 
+                           autocomplete="off"
+                           oninput="filterProducts()"
+                           onfocus="showProductSuggestions()"
+                           onblur="hideProductSuggestions()">
+                    <input type="hidden" id="productNameHidden" name="product_name" required>
+                    <div id="productSuggestions" class="autocomplete-suggestions" style="display: none;"></div>
+                </div>
+                <small style="color: #666; display: block; margin-top: 0.25rem;">Start typing to filter products</small>
             </div>
             <div class="form-row">
                 <div class="form-group">
@@ -151,14 +155,196 @@
 {% endblock %}
 
 {% block scripts %}
+<style>
+.autocomplete-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #ddd;
+    border-top: none;
+    border-radius: 0 0 0.5rem 0.5rem;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1000;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.autocomplete-suggestion {
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background-color 0.2s;
+}
+
+.autocomplete-suggestion:hover {
+    background-color: #f5f5f5;
+}
+
+.autocomplete-suggestion:last-child {
+    border-bottom: none;
+}
+
+.autocomplete-suggestion.highlighted {
+    background-color: #6366f1;
+    color: white;
+}
+
+#productNameInput {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 0.5rem;
+    font-size: 1rem;
+}
+
+#productNameInput:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+</style>
 <script>
+// Store product names from server
+const allProducts = [
+    {% if product_names %}
+        {% for product_name in product_names %}
+        "{{ product_name|e }}",
+        {% endfor %}
+    {% endif %}
+].filter(p => p); // Remove empty strings
+
+let selectedProductIndex = -1;
+
+function filterProducts() {
+    const input = document.getElementById('productNameInput');
+    const query = input.value.toLowerCase().trim();
+    const suggestionsDiv = document.getElementById('productSuggestions');
+    
+    if (query.length === 0) {
+        suggestionsDiv.innerHTML = '';
+        suggestionsDiv.style.display = 'none';
+        document.getElementById('productNameHidden').value = '';
+        return;
+    }
+    
+    // Filter products that match the query
+    const matches = allProducts.filter(product => 
+        product.toLowerCase().includes(query)
+    );
+    
+    // Show at least first 7 matches (or all if less than 7)
+    const displayMatches = matches.slice(0, Math.max(7, matches.length));
+    
+    if (displayMatches.length === 0) {
+        suggestionsDiv.innerHTML = '<div class="autocomplete-suggestion" style="color: #999; cursor: default;">No products found</div>';
+        suggestionsDiv.style.display = 'block';
+        document.getElementById('productNameHidden').value = '';
+        return;
+    }
+    
+    // Build suggestions HTML
+    let html = '';
+    displayMatches.forEach((product, index) => {
+        const highlighted = product.replace(
+            new RegExp(`(${query})`, 'gi'),
+            '<strong>$1</strong>'
+        );
+        html += `<div class="autocomplete-suggestion" data-index="${index}" data-product="${product.replace(/"/g, '&quot;')}" onclick="selectProduct('${product.replace(/'/g, "\\'")}')">${highlighted}</div>`;
+    });
+    
+    suggestionsDiv.innerHTML = html;
+    suggestionsDiv.style.display = 'block';
+    selectedProductIndex = -1;
+}
+
+function selectProduct(productName) {
+    document.getElementById('productNameInput').value = productName;
+    document.getElementById('productNameHidden').value = productName;
+    document.getElementById('productSuggestions').style.display = 'none';
+    selectedProductIndex = -1;
+}
+
+function showProductSuggestions() {
+    const input = document.getElementById('productNameInput');
+    if (input.value.trim().length > 0) {
+        filterProducts();
+    } else {
+        // Show all products when focused and empty
+        const suggestionsDiv = document.getElementById('productSuggestions');
+        let html = '';
+        const displayProducts = allProducts.slice(0, 7);
+        displayProducts.forEach(product => {
+            html += `<div class="autocomplete-suggestion" onclick="selectProduct('${product.replace(/'/g, "\\'")}')">${product}</div>`;
+        });
+        suggestionsDiv.innerHTML = html;
+        suggestionsDiv.style.display = 'block';
+    }
+}
+
+function hideProductSuggestions() {
+    // Delay hiding to allow click events to fire
+    setTimeout(() => {
+        document.getElementById('productSuggestions').style.display = 'none';
+    }, 200);
+}
+
+// Handle keyboard navigation
+document.addEventListener('DOMContentLoaded', function() {
+    const productInput = document.getElementById('productNameInput');
+    if (productInput) {
+        productInput.addEventListener('keydown', function(e) {
+            const suggestions = document.querySelectorAll('.autocomplete-suggestion');
+            
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                selectedProductIndex = Math.min(selectedProductIndex + 1, suggestions.length - 1);
+                updateHighlight(suggestions);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                selectedProductIndex = Math.max(selectedProductIndex - 1, -1);
+                updateHighlight(suggestions);
+            } else if (e.key === 'Enter' && selectedProductIndex >= 0) {
+                e.preventDefault();
+                const selected = suggestions[selectedProductIndex];
+                if (selected && selected.dataset.product) {
+                    selectProduct(selected.dataset.product);
+                }
+            } else if (e.key === 'Escape') {
+                document.getElementById('productSuggestions').style.display = 'none';
+                selectedProductIndex = -1;
+            }
+        });
+    }
+});
+
+function updateHighlight(suggestions) {
+    suggestions.forEach((suggestion, index) => {
+        if (index === selectedProductIndex) {
+            suggestion.classList.add('highlighted');
+        } else {
+            suggestion.classList.remove('highlighted');
+        }
+    });
+}
+
 function openAddProductModal() {
     document.getElementById('addProductModal').style.display = 'block';
+    // Reset product input
+    document.getElementById('productNameInput').value = '';
+    document.getElementById('productNameHidden').value = '';
+    document.getElementById('productSuggestions').style.display = 'none';
 }
 
 function closeAddProductModal() {
     document.getElementById('addProductModal').style.display = 'none';
     document.getElementById('addProductForm').reset();
+    // Reset autocomplete fields
+    document.getElementById('productNameInput').value = '';
+    document.getElementById('productNameHidden').value = '';
+    document.getElementById('productSuggestions').style.display = 'none';
+    selectedProductIndex = -1;
 }
 
 function openStatusModal(index, productName, currentStatus, remainingQty) {
@@ -217,8 +403,20 @@ function calculateCostPerUnit() {
 
 function addProduct(event) {
     event.preventDefault();
+    
+    // Validate that a product is selected
+    const productName = document.getElementById('productNameHidden').value;
+    if (!productName || productName.trim() === '') {
+        alert('Please select a product from the list');
+        document.getElementById('productNameInput').focus();
+        return;
+    }
+    
     const formData = new FormData(event.target);
     const data = Object.fromEntries(formData);
+    
+    // Ensure product_name is set from hidden field
+    data.product_name = productName;
     
     fetch('/api/add_product', {
         method: 'POST',

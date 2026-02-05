@@ -47,22 +47,50 @@ def inventory():
     try:
         if INVENTORY_SHEET_URL:
             df = connector.read_from_sheets(INVENTORY_SHEET_URL)
-            # Calculate remaining_qty if missing
-            if 'remaining_qty' not in df.columns:
-                if 'total_bought_quantity' in df.columns:
-                    df['remaining_qty'] = df['total_bought_quantity']
-                else:
-                    df['remaining_qty'] = df['quantity']
-            # Ensure total_bought_quantity exists
-            if 'total_bought_quantity' not in df.columns:
-                df['total_bought_quantity'] = df['quantity']
-            inventory_items = df.to_dict('records')
+            
+            # Handle empty DataFrame
+            if df.empty:
+                logger.info("Inventory sheet is empty")
+                inventory_items = []
+            else:
+                # Calculate remaining_qty if missing
+                if 'remaining_qty' not in df.columns:
+                    if 'total_bought_quantity' in df.columns:
+                        df['remaining_qty'] = df['total_bought_quantity']
+                    elif 'quantity' in df.columns:
+                        df['remaining_qty'] = df['quantity']
+                    else:
+                        df['remaining_qty'] = 0
+                
+                # Ensure total_bought_quantity exists
+                if 'total_bought_quantity' not in df.columns:
+                    if 'quantity' in df.columns:
+                        df['total_bought_quantity'] = df['quantity']
+                    else:
+                        df['total_bought_quantity'] = 0
+                
+                inventory_items = df.to_dict('records')
         else:
             inventory_items = []
-    except Exception as e:
-        logger.error(f"Error loading inventory: {str(e)}")
+    except KeyError as e:
+        # Handle missing column errors with user-friendly message
+        missing_column = str(e).strip("'\"")
+        logger.error(f"Error loading inventory: Missing column '{missing_column}' in spreadsheet", exc_info=True)
         inventory_items = []
-        flash(f"Error loading inventory: {str(e)}", "error")
+        flash(f"Your inventory spreadsheet is missing the '{missing_column}' column. Please add this column to your Google Sheet.", "error")
+    except Exception as e:
+        error_msg = str(e)
+        # Convert technical errors to user-friendly messages
+        if "Google Sheets client not initialized" in error_msg:
+            user_msg = "Unable to connect to Google Sheets. Please check that your credentials are set up correctly in the environment variables."
+        elif "quantity" in error_msg.lower() or "column" in error_msg.lower():
+            user_msg = "Your inventory spreadsheet structure doesn't match what the app expects. Please check that all required columns are present in your Google Sheet."
+        else:
+            user_msg = f"Unable to load inventory. Please check your Google Sheet connection and try again. ({error_msg[:100]})"
+        
+        logger.error(f"Error loading inventory: {error_msg}", exc_info=True)
+        inventory_items = []
+        flash(user_msg, "error")
     
     # Load product names from INDEX sheet product_name column for dropdown
     product_names = []
@@ -70,7 +98,7 @@ def inventory():
         if INDEX_SHEET_URL:
             index_df = connector.read_from_sheets(INDEX_SHEET_URL)
             # Get product names from product_name column (or first column if column doesn't exist)
-            if not index_df.empty:
+            if not index_df.empty and len(index_df.columns) > 0:
                 if 'product_name' in index_df.columns:
                     product_names = index_df['product_name'].dropna().unique().tolist()
                 else:
@@ -78,8 +106,11 @@ def inventory():
                     product_names = index_df.iloc[:, 0].dropna().unique().tolist()
                 # Filter out empty strings
                 product_names = [p for p in product_names if str(p).strip()]
+                logger.info(f"Loaded {len(product_names)} product names from INDEX sheet")
+            else:
+                logger.warning("INDEX sheet is empty or has no columns")
     except Exception as e:
-        logger.warning(f"Could not load INDEX sheet: {str(e)}")
+        logger.warning(f"Could not load INDEX sheet: {str(e)}", exc_info=True)
         product_names = []
     
     return render_template('inventory.html', items=inventory_items, product_names=product_names)
@@ -121,7 +152,12 @@ def add_product():
                 if 'total_bought_quantity' not in df.columns:
                     df['total_bought_quantity'] = df['quantity'] if 'quantity' in df.columns else 0
                 if 'remaining_qty' not in df.columns:
-                    df['remaining_qty'] = df['total_bought_quantity'] if 'total_bought_quantity' in df.columns else df['quantity']
+                    if 'total_bought_quantity' in df.columns:
+                        df['remaining_qty'] = df['total_bought_quantity']
+                    elif 'quantity' in df.columns:
+                        df['remaining_qty'] = df['quantity']
+                    else:
+                        df['remaining_qty'] = 0
             # Add new row using pd.concat (append is deprecated)
             new_df = pd.DataFrame([new_product])
             df = pd.concat([df, new_df], ignore_index=True)
@@ -130,9 +166,20 @@ def add_product():
             logger.info(f"Added product: {product_name}")
         
         return jsonify({'success': True, 'message': 'Product added successfully'})
+    except KeyError as e:
+        missing_column = str(e).strip("'\"")
+        logger.error(f"Error adding product: Missing column '{missing_column}' in spreadsheet", exc_info=True)
+        return jsonify({'success': False, 'message': f"Your spreadsheet is missing the '{missing_column}' column. Please add this column to your Google Sheet."}), 400
     except Exception as e:
-        logger.error(f"Error adding product: {str(e)}")
-        return jsonify({'success': False, 'message': str(e)}), 400
+        error_msg = str(e)
+        if "Google Sheets client not initialized" in error_msg:
+            user_msg = "Unable to connect to Google Sheets. Please check your credentials."
+        elif "column" in error_msg.lower():
+            user_msg = "Your spreadsheet structure doesn't match what the app expects. Please check your Google Sheet columns."
+        else:
+            user_msg = f"Unable to add product. Please try again. ({error_msg[:80]})"
+        logger.error(f"Error adding product: {error_msg}", exc_info=True)
+        return jsonify({'success': False, 'message': user_msg}), 400
 
 @app.route('/api/update_status', methods=['POST'])
 def update_status():
@@ -151,14 +198,25 @@ def update_status():
             # Update status
             if product_id < len(df):
                 # Get current remaining quantity
-                current_remaining = int(df.at[product_id, 'remaining_qty']) if 'remaining_qty' in df.columns and pd.notna(df.at[product_id, 'remaining_qty']) else int(df.at[product_id, 'quantity'])
+                if 'remaining_qty' in df.columns and pd.notna(df.at[product_id, 'remaining_qty']):
+                    current_remaining = int(df.at[product_id, 'remaining_qty'])
+                elif 'total_bought_quantity' in df.columns and pd.notna(df.at[product_id, 'total_bought_quantity']):
+                    current_remaining = int(df.at[product_id, 'total_bought_quantity'])
+                elif 'quantity' in df.columns and pd.notna(df.at[product_id, 'quantity']):
+                    current_remaining = int(df.at[product_id, 'quantity'])
+                else:
+                    current_remaining = 0
                 
                 # Decrement remaining_qty if status is sold, used, or freebie
                 if new_status in ['sold', 'used', 'freebie']:
                     new_remaining = max(0, current_remaining - quantity_used)
+                    # Ensure remaining_qty column exists
+                    if 'remaining_qty' not in df.columns:
+                        df['remaining_qty'] = current_remaining
                     df.at[product_id, 'remaining_qty'] = new_remaining
-                    # Update quantity to reflect remaining
-                    df.at[product_id, 'quantity'] = new_remaining
+                    # Update quantity to reflect remaining (if column exists)
+                    if 'quantity' in df.columns:
+                        df.at[product_id, 'quantity'] = new_remaining
                 
                 df.at[product_id, 'status'] = new_status
                 df.at[product_id, 'remarks'] = remarks
@@ -224,9 +282,20 @@ def update_status():
                 logger.info(f"Updated product {product_id} status to {new_status}, remaining_qty: {df.at[product_id, 'remaining_qty']}")
             
         return jsonify({'success': True, 'message': 'Status updated successfully'})
+    except KeyError as e:
+        missing_column = str(e).strip("'\"")
+        logger.error(f"Error updating status: Missing column '{missing_column}' in spreadsheet", exc_info=True)
+        return jsonify({'success': False, 'message': f"Your spreadsheet is missing the '{missing_column}' column. Please add this column to your Google Sheet."}), 400
     except Exception as e:
-        logger.error(f"Error updating status: {str(e)}")
-        return jsonify({'success': False, 'message': str(e)}), 400
+        error_msg = str(e)
+        if "Google Sheets client not initialized" in error_msg:
+            user_msg = "Unable to connect to Google Sheets. Please check your credentials."
+        elif "column" in error_msg.lower() or "quantity" in error_msg.lower():
+            user_msg = "Your spreadsheet structure doesn't match what the app expects. Please check your Google Sheet columns."
+        else:
+            user_msg = f"Unable to update status. Please try again. ({error_msg[:80]})"
+        logger.error(f"Error updating status: {error_msg}", exc_info=True)
+        return jsonify({'success': False, 'message': user_msg}), 400
 
 @app.route('/sold')
 def sold():
@@ -376,18 +445,6 @@ def not_found(error):
         return render_template('error.html', error_message="Page not found."), 404
     except:
         return "<h1>404 - Page Not Found</h1>", 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    """Handle internal server errors"""
-    logger.error(f"Internal Server Error: {str(error)}", exc_info=True)
-    return render_template('error.html', error_message="An internal error occurred. Please check the logs."), 500
-
-@app.errorhandler(404)
-def not_found(error):
-    """Handle 404 errors"""
-    logger.warning(f"404 Error: {str(error)}")
-    return render_template('error.html', error_message="Page not found."), 404
 
 @app.route('/api/create_invoice', methods=['POST'])
 def create_invoice():
