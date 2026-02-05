@@ -277,12 +277,17 @@ def update_status():
                             'profit': profit,
                             'tithe': tithe,
                             'profit_after_tithe': profit_after_tithe,
-                            'tithe_kept': False,  # Default to not kept
+                            'tithe_kept': 'False',  # Default to not kept (store as string for Google Sheets)
                             'remarks': remarks,
                             'date_sold': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                         }
                         new_sold_df = pd.DataFrame([sold_item])
+                        # Ensure tithe_kept column is string type in existing DataFrame
+                        if 'tithe_kept' in sold_df.columns:
+                            sold_df['tithe_kept'] = sold_df['tithe_kept'].astype(str)
                         sold_df = pd.concat([sold_df, new_sold_df], ignore_index=True)
+                        # Ensure tithe_kept column remains string type after concat
+                        sold_df['tithe_kept'] = sold_df['tithe_kept'].astype(str)
                         connector.write_to_sheets(sold_df, SOLD_ITEMS_SHEET_URL)
                 
             # Track used/freebie items
@@ -347,13 +352,16 @@ def sold():
         for item in sold_items 
         if item.get('tithe_kept') == True or str(item.get('tithe_kept', '')).lower() == 'true'
     )
+    # Calculate tithe unkept (difference between total tithe and tithe kept)
+    tithe_unkept_total = total_tithe - tithe_kept_total
     
     return render_template('sold.html', 
                          items=sold_items,
                          total_profit=total_profit,
                          total_tithe=total_tithe,
                          total_profit_after_tithe=total_profit_after_tithe,
-                         tithe_kept_total=tithe_kept_total)
+                         tithe_kept_total=tithe_kept_total,
+                         tithe_unkept_total=tithe_unkept_total)
 
 @app.route('/api/update_tithe_status', methods=['POST'])
 def update_tithe_status():
@@ -366,9 +374,15 @@ def update_tithe_status():
         if SOLD_ITEMS_SHEET_URL:
             df = connector.read_from_sheets(SOLD_ITEMS_SHEET_URL)
             if item_id < len(df):
-                df.at[item_id, 'tithe_kept'] = tithe_kept
+                # Ensure tithe_kept column exists and is string type
+                if 'tithe_kept' not in df.columns:
+                    df['tithe_kept'] = 'False'
+                # Convert column to string type to avoid dtype issues
+                df['tithe_kept'] = df['tithe_kept'].astype(str)
+                # Convert boolean to string for Google Sheets compatibility
+                df.at[item_id, 'tithe_kept'] = 'True' if tithe_kept else 'False'
                 connector.write_to_sheets(df, SOLD_ITEMS_SHEET_URL)
-                logger.info(f"Updated tithe status for item {item_id}")
+                logger.info(f"Updated tithe status for item {item_id} to {df.at[item_id, 'tithe_kept']}")
         
         return jsonify({'success': True, 'message': 'Tithe status updated'})
     except Exception as e:
