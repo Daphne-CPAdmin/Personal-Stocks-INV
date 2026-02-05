@@ -62,9 +62,14 @@
                                     {{ invoice.get('invoice_date', '-') }}
                                 </td>
                                 <td rowspan="{{ items_list|length }}" style="vertical-align: top; padding-top: 1rem;">
-                                    <button class="btn btn-sm btn-primary" onclick="viewInvoice('{{ invoice.get('invoice_number', '') }}', {{ invoice.get('items_parsed', [])|tojson|safe }}, '{{ invoice.get('customer_name', '') }}', '{{ invoice.get('invoice_date', '') }}', {{ invoice.get('total_amount', 0) }}, {{ shipment_fee }})">
-                                        View
-                                    </button>
+                                    <div style="display: flex; gap: 0.5rem; flex-direction: column;">
+                                        <button class="btn btn-sm btn-primary" onclick="viewInvoice('{{ invoice.get('invoice_number', '') }}', {{ invoice.get('items_parsed', [])|tojson|safe }}, '{{ invoice.get('customer_name', '') }}', '{{ invoice.get('invoice_date', '') }}', {{ invoice.get('total_amount', 0) }}, {{ shipment_fee }})">
+                                            View
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" onclick="deleteInvoice('{{ invoice.get('invoice_number', '') }}')">
+                                            Delete
+                                        </button>
+                                    </div>
                                 </td>
                                 {% endif %}
                             </tr>
@@ -78,9 +83,14 @@
                                 <td><strong>₱{{ "%.2f"|format(invoice.get('total_amount', 0)) }}</strong></td>
                                 <td>{{ invoice.get('invoice_date', '-') }}</td>
                                 <td>
-                                    <button class="btn btn-sm btn-primary" onclick="viewInvoice('{{ invoice.get('invoice_number', '') }}', [], '{{ invoice.get('customer_name', '') }}', '{{ invoice.get('invoice_date', '') }}', {{ invoice.get('total_amount', 0) }}, {{ shipment_fee }})">
-                                        View
-                                    </button>
+                                    <div style="display: flex; gap: 0.5rem; flex-direction: column;">
+                                        <button class="btn btn-sm btn-primary" onclick="viewInvoice('{{ invoice.get('invoice_number', '') }}', [], '{{ invoice.get('customer_name', '') }}', '{{ invoice.get('invoice_date', '') }}', {{ invoice.get('total_amount', 0) }}, {{ shipment_fee }})">
+                                            View
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" onclick="deleteInvoice('{{ invoice.get('invoice_number', '') }}')">
+                                            Delete
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         {% endif %}
@@ -215,6 +225,65 @@
         </form>
     </div>
 </div>
+
+<!-- View Invoice Modal -->
+<div id="viewInvoiceModal" class="modal">
+    <div class="modal-content modal-large invoice-view-modal">
+        <span class="close" onclick="closeViewInvoiceModal()">&times;</span>
+        <div class="invoice-view-header">
+            <h2>INVOICE</h2>
+            <p id="viewInvoiceNumber" class="invoice-number"></p>
+        </div>
+        
+        <div class="invoice-view-info">
+            <div class="invoice-view-info-block">
+                <h3>Bill To:</h3>
+                <p id="viewCustomerName"></p>
+            </div>
+            <div class="invoice-view-info-block">
+                <h3>Invoice Date:</h3>
+                <p id="viewInvoiceDate"></p>
+            </div>
+        </div>
+        
+        <div class="invoice-view-table-container">
+            <table class="invoice-view-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Product Name</th>
+                        <th>Quantity</th>
+                        <th>Price Per Piece</th>
+                        <th>Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody id="viewInvoiceItemsBody">
+                    <!-- Items will be populated by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="invoice-view-totals">
+            <div class="invoice-totals-row">
+                <span class="invoice-totals-label">Subtotal:</span>
+                <span class="invoice-totals-value" id="viewSubtotal">₱0.00</span>
+            </div>
+            <div class="invoice-totals-row">
+                <span class="invoice-totals-label">Shipment/Delivery Fee:</span>
+                <span class="invoice-totals-value" id="viewShipmentFee">₱0.00</span>
+            </div>
+            <div class="invoice-totals-row invoice-totals-final">
+                <span class="invoice-totals-label">Total Amount:</span>
+                <span class="invoice-totals-value" id="viewTotalAmount">₱0.00</span>
+            </div>
+        </div>
+        
+        <div class="invoice-view-actions">
+            <button class="btn btn-secondary" onclick="downloadInvoice()">Download Invoice</button>
+            <button class="btn btn-primary" onclick="closeViewInvoiceModal()">Close</button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -303,6 +372,169 @@
     border-radius: 0.5rem;
     text-align: right;
     font-size: 1.25rem;
+}
+
+/* Invoice View Modal Styles */
+.invoice-view-modal {
+    background: linear-gradient(135deg, #e6e6fa 0%, #d8bfd8 50%, #dda0dd 100%);
+    border-radius: 16px;
+    padding: 0;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.invoice-view-modal .modal-content {
+    background: white;
+    margin: 20px;
+    border-radius: 12px;
+    padding: 40px;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+}
+
+.invoice-view-header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 3px solid #d8bfd8;
+}
+
+.invoice-view-header h2 {
+    color: #9370db;
+    margin: 0;
+    font-size: 32px;
+    font-weight: 700;
+}
+
+.invoice-number {
+    font-size: 24px;
+    color: #9370db;
+    margin-top: 10px;
+    font-weight: 600;
+}
+
+.invoice-view-info {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 30px;
+    padding: 20px;
+    background: linear-gradient(135deg, #f5f0ff 0%, #f0e6ff 100%);
+    border-radius: 8px;
+}
+
+.invoice-view-info-block {
+    flex: 1;
+}
+
+.invoice-view-info-block h3 {
+    color: #9370db;
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.invoice-view-info-block p {
+    margin: 0;
+    font-size: 18px;
+    color: #4b0082;
+    font-weight: 500;
+}
+
+.invoice-view-table-container {
+    margin-bottom: 30px;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.invoice-view-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+}
+
+.invoice-view-table thead {
+    background: linear-gradient(135deg, #d8bfd8 0%, #dda0dd 100%);
+}
+
+.invoice-view-table th {
+    color: #4b0082;
+    padding: 15px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.invoice-view-table td {
+    padding: 12px 15px;
+    border-bottom: 1px solid #e6e6fa;
+    color: #333;
+}
+
+.invoice-view-table tbody tr:hover {
+    background-color: #f5f0ff;
+    transition: background-color 0.2s;
+}
+
+.invoice-view-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.invoice-view-totals {
+    margin-top: 30px;
+    padding: 20px;
+    background: linear-gradient(135deg, #f5f0ff 0%, #f0e6ff 100%);
+    border-radius: 8px;
+    text-align: right;
+}
+
+.invoice-totals-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 10px;
+    padding: 8px 0;
+    align-items: center;
+}
+
+.invoice-totals-label {
+    width: 200px;
+    text-align: right;
+    padding-right: 20px;
+    font-weight: 500;
+    color: #4b0082;
+}
+
+.invoice-totals-value {
+    width: 150px;
+    text-align: right;
+    font-weight: 600;
+    color: #333;
+}
+
+.invoice-totals-final {
+    border-top: 2px solid #9370db;
+    padding-top: 15px;
+    margin-top: 15px;
+    font-size: 20px;
+}
+
+.invoice-totals-final .invoice-totals-label,
+.invoice-totals-final .invoice-totals-value {
+    color: #4b0082;
+    font-size: 20px;
+}
+
+.invoice-view-actions {
+    margin-top: 30px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    padding-top: 20px;
+    border-top: 2px solid #d8bfd8;
 }
 </style>
 <script>
@@ -586,29 +818,267 @@ function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmoun
         itemsList = [];
     }
     
-    let message = `INVOICE #${invoiceNumber}\n`;
-    message += `Customer: ${customerName}\n`;
-    message += `Date: ${invoiceDate}\n\n`;
-    message += `ITEMS:\n`;
-    message += '─'.repeat(50) + '\n';
-    
     let subtotal = 0;
-    itemsList.forEach((item, index) => {
-        message += `${index + 1}. ${item.name}\n`;
-        message += `   Quantity: ${item.quantity} pcs\n`;
-        message += `   Price per unit: ₱${parseFloat(item.price).toFixed(2)}\n`;
-        message += `   Subtotal: ₱${parseFloat(item.subtotal).toFixed(2)}\n\n`;
+    itemsList.forEach((item) => {
         subtotal += parseFloat(item.subtotal || 0);
     });
     
     shipmentFee = shipmentFee || 0;
-    message += '─'.repeat(50) + '\n';
-    message += `Subtotal: ₱${subtotal.toFixed(2)}\n`;
-    message += `Shipment/Delivery Fee: ₱${parseFloat(shipmentFee).toFixed(2)}\n`;
-    message += '─'.repeat(50) + '\n';
-    message += `TOTAL AMOUNT: ₱${parseFloat(totalAmount).toFixed(2)}`;
     
-    alert(message);
+    // Populate modal
+    document.getElementById('viewInvoiceNumber').textContent = invoiceNumber;
+    document.getElementById('viewCustomerName').textContent = customerName;
+    document.getElementById('viewInvoiceDate').textContent = invoiceDate;
+    
+    // Populate items table
+    const itemsTableBody = document.getElementById('viewInvoiceItemsBody');
+    itemsTableBody.innerHTML = '';
+    
+    if (itemsList.length === 0) {
+        itemsTableBody.innerHTML = '<tr><td colspan="4" class="text-center">No items</td></tr>';
+    } else {
+        itemsList.forEach((item, index) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${index + 1}</td>
+                <td>${item.name}</td>
+                <td>${item.quantity}</td>
+                <td>₱${parseFloat(item.price).toFixed(2)}</td>
+                <td>₱${parseFloat(item.subtotal).toFixed(2)}</td>
+            `;
+            itemsTableBody.appendChild(row);
+        });
+    }
+    
+    // Update totals
+    document.getElementById('viewSubtotal').textContent = `₱${subtotal.toFixed(2)}`;
+    document.getElementById('viewShipmentFee').textContent = `₱${parseFloat(shipmentFee).toFixed(2)}`;
+    document.getElementById('viewTotalAmount').textContent = `₱${parseFloat(totalAmount).toFixed(2)}`;
+    
+    // Store data for download
+    window.currentInvoiceData = {
+        invoiceNumber,
+        customerName,
+        invoiceDate,
+        items: itemsList,
+        subtotal,
+        shipmentFee,
+        totalAmount
+    };
+    
+    // Show modal
+    document.getElementById('viewInvoiceModal').style.display = 'block';
+}
+
+function closeViewInvoiceModal() {
+    document.getElementById('viewInvoiceModal').style.display = 'none';
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const viewModal = document.getElementById('viewInvoiceModal');
+    if (event.target == viewModal) {
+        closeViewInvoiceModal();
+    }
+}
+
+function downloadInvoice() {
+    if (!window.currentInvoiceData) return;
+    
+    const data = window.currentInvoiceData;
+    const invoiceHTML = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Invoice ${data.invoiceNumber}</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 40px;
+            background: linear-gradient(135deg, #e6e6fa 0%, #d8bfd8 50%, #dda0dd 100%);
+            min-height: 100vh;
+        }
+        .invoice-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .invoice-header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #d8bfd8;
+        }
+        .invoice-header h1 {
+            color: #9370db;
+            margin: 0;
+            font-size: 32px;
+        }
+        .invoice-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+        .info-block {
+            flex: 1;
+        }
+        .info-block h3 {
+            color: #9370db;
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            text-transform: uppercase;
+        }
+        .info-block p {
+            margin: 5px 0;
+            font-size: 16px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+        th {
+            background: linear-gradient(135deg, #d8bfd8 0%, #dda0dd 100%);
+            color: #4b0082;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e6e6fa;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .totals {
+            margin-top: 20px;
+            text-align: right;
+        }
+        .totals-row {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 10px;
+            padding: 8px 0;
+        }
+        .totals-label {
+            width: 200px;
+            text-align: right;
+            padding-right: 20px;
+            font-weight: 500;
+        }
+        .totals-value {
+            width: 150px;
+            text-align: right;
+        }
+        .total-final {
+            border-top: 2px solid #9370db;
+            padding-top: 15px;
+            margin-top: 15px;
+            font-size: 20px;
+            font-weight: bold;
+            color: #4b0082;
+        }
+    </style>
+</head>
+<body>
+    <div class="invoice-container">
+        <div class="invoice-header">
+            <h1>INVOICE</h1>
+            <p style="font-size: 24px; color: #9370db; margin-top: 10px;">${data.invoiceNumber}</p>
+        </div>
+        
+        <div class="invoice-info">
+            <div class="info-block">
+                <h3>Bill To:</h3>
+                <p style="font-size: 18px; font-weight: 600;">${data.customerName}</p>
+            </div>
+            <div class="info-block" style="text-align: right;">
+                <h3>Invoice Date:</h3>
+                <p style="font-size: 18px;">${data.invoiceDate}</p>
+            </div>
+        </div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Product Name</th>
+                    <th>Quantity</th>
+                    <th>Price Per Piece</th>
+                    <th>Subtotal</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${data.items.map((item, index) => `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td>${item.name}</td>
+                        <td>${item.quantity}</td>
+                        <td>₱${parseFloat(item.price).toFixed(2)}</td>
+                        <td>₱${parseFloat(item.subtotal).toFixed(2)}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+        
+        <div class="totals">
+            <div class="totals-row">
+                <div class="totals-label">Subtotal:</div>
+                <div class="totals-value">₱${data.subtotal.toFixed(2)}</div>
+            </div>
+            <div class="totals-row">
+                <div class="totals-label">Shipment/Delivery Fee:</div>
+                <div class="totals-value">₱${parseFloat(data.shipmentFee).toFixed(2)}</div>
+            </div>
+            <div class="totals-row total-final">
+                <div class="totals-label">Total Amount:</div>
+                <div class="totals-value">₱${parseFloat(data.totalAmount).toFixed(2)}</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+    `;
+    
+    const blob = new Blob([invoiceHTML], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Invoice_${data.invoiceNumber}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function deleteInvoice(invoiceNumber) {
+    if (!confirm(`Are you sure you want to delete invoice ${invoiceNumber}? This action cannot be undone.`)) {
+        return;
+    }
+    
+    fetch('/api/delete_invoice', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ invoice_number: invoiceNumber })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert('Invoice deleted successfully!');
+            location.reload();
+        } else {
+            alert('Error: ' + result.message);
+        }
+    })
+    .catch(error => {
+        alert('Error: ' + error);
+    });
 }
 
 // Update total when inputs change and initialize autocomplete

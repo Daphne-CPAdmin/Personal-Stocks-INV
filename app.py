@@ -581,6 +581,39 @@ def create_invoice():
         logger.error(f"Error creating invoice: {str(e)}")
         return jsonify({'success': False, 'message': str(e)}), 400
 
+@app.route('/api/delete_invoice', methods=['POST'])
+def delete_invoice():
+    """Delete an invoice"""
+    try:
+        data = request.json
+        invoice_number = data.get('invoice_number')
+        
+        if not invoice_number:
+            return jsonify({'success': False, 'message': 'Invoice number is required'}), 400
+        
+        if INVOICES_SHEET_URL:
+            df = connector.read_from_sheets(INVOICES_SHEET_URL)
+            if df.empty:
+                return jsonify({'success': False, 'message': 'Invoice not found'}), 404
+            
+            # Find and remove the invoice
+            initial_count = len(df)
+            df = df[df['invoice_number'] != invoice_number]
+            
+            if len(df) == initial_count:
+                return jsonify({'success': False, 'message': 'Invoice not found'}), 404
+            
+            connector.write_to_sheets(df, INVOICES_SHEET_URL)
+            logger.info(f"Deleted invoice {invoice_number}")
+        
+        return jsonify({'success': True, 'message': 'Invoice deleted successfully'})
+    except Exception as e:
+        logger.error(f"Error deleting invoice: {str(e)}", exc_info=True)
+        user_message = "Failed to delete invoice. Please try again."
+        if "Google Sheets client not initialized" in str(e):
+            user_message = "Unable to connect to Google Sheets. Please check your credentials."
+        return jsonify({'success': False, 'message': user_message}), 400
+
 if __name__ == '__main__':
     # Create necessary directories
     os.makedirs('logs', exist_ok=True)
