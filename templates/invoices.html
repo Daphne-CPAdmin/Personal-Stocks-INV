@@ -41,33 +41,33 @@
                             {% for item in items_list %}
                             <tr>
                                 {% if loop.first %}
-                                <td rowspan="{{ items_list|length }}" style="vertical-align: top; padding-top: 1rem;">
+                                <td rowspan="{{ items_list|length }}" style="vertical-align: middle; text-align: center; padding-top: 1rem;">
                                     <strong>{{ invoice.get('invoice_number', 'N/A') }}</strong>
                                 </td>
-                                <td rowspan="{{ items_list|length }}" style="vertical-align: top; padding-top: 1rem;">
+                                <td rowspan="{{ items_list|length }}" style="vertical-align: middle; text-align: center; padding-top: 1rem;">
                                     {{ invoice.get('customer_name', 'N/A') }}
                                 </td>
                                 {% endif %}
-                                <td>{{ item.get('name', 'N/A') }}</td>
-                                <td>₱{{ "%.2f"|format(item.get('price', 0)) }}</td>
-                                <td>{{ item.get('quantity', 0) }}</td>
-                                <td>₱{{ "%.2f"|format(item.get('subtotal', 0)) }}</td>
+                                <td style="text-align: center;">{{ item.get('name', 'N/A') }}</td>
+                                <td style="text-align: center;">₱{{ "%.2f"|format(item.get('price', 0)) }}</td>
+                                <td style="text-align: center;">{{ item.get('quantity', 0) }}</td>
+                                <td style="text-align: center;">₱{{ "%.2f"|format(item.get('subtotal', 0)) }}</td>
                                 {% if loop.first %}
-                                <td rowspan="{{ items_list|length }}" style="vertical-align: top; padding-top: 1rem;">
+                                <td rowspan="{{ items_list|length }}" style="vertical-align: middle; text-align: center; padding-top: 1rem;">
                                     ₱{{ "%.2f"|format(shipment_fee) }}
                                 </td>
-                                <td rowspan="{{ items_list|length }}" style="vertical-align: top; padding-top: 1rem;">
+                                <td rowspan="{{ items_list|length }}" style="vertical-align: middle; text-align: center; padding-top: 1rem;">
                                     <strong>₱{{ "%.2f"|format(invoice.get('total_amount', 0)) }}</strong>
                                 </td>
-                                <td rowspan="{{ items_list|length }}" style="vertical-align: top; padding-top: 1rem;">
+                                <td rowspan="{{ items_list|length }}" style="vertical-align: middle; text-align: center; padding-top: 1rem;">
                                     {{ invoice.get('invoice_date', '-') }}
                                 </td>
-                                <td rowspan="{{ items_list|length }}" style="vertical-align: top; padding-top: 1rem;">
-                                    <div style="display: flex; gap: 0.5rem; flex-direction: column;">
-                                        <button class="btn btn-sm btn-primary" onclick="viewInvoice('{{ invoice.get('invoice_number', '') }}', {{ invoice.get('items_parsed', [])|tojson|safe }}, '{{ invoice.get('customer_name', '') }}', '{{ invoice.get('invoice_date', '') }}', {{ invoice.get('total_amount', 0) }}, {{ shipment_fee }})">
+                                <td rowspan="{{ items_list|length }}" style="vertical-align: middle; text-align: center; padding-top: 1rem;">
+                                    <div style="display: flex; gap: 0.5rem; flex-direction: column; align-items: center;">
+                                        <button class="btn btn-sm btn-primary" onclick="viewInvoice('{{ invoice.get('invoice_number', '')|e }}', {{ invoice.get('items_parsed', [])|tojson|safe }}, '{{ invoice.get('customer_name', '')|e }}', '{{ invoice.get('invoice_date', '')|e }}', {{ invoice.get('total_amount', 0) }}, {{ shipment_fee }})">
                                             View
                                         </button>
-                                        <button class="btn btn-sm btn-danger" onclick="deleteInvoice('{{ invoice.get('invoice_number', '') }}')">
+                                        <button class="btn btn-sm btn-danger" onclick="deleteInvoice('{{ invoice.get('invoice_number', '')|e }}')">
                                             Delete
                                         </button>
                                     </div>
@@ -77,18 +77,18 @@
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td><strong>{{ invoice.get('invoice_number', 'N/A') }}</strong></td>
-                                <td>{{ invoice.get('customer_name', 'N/A') }}</td>
+                                <td style="text-align: center;"><strong>{{ invoice.get('invoice_number', 'N/A') }}</strong></td>
+                                <td style="text-align: center;">{{ invoice.get('customer_name', 'N/A') }}</td>
                                 <td colspan="3" class="text-center text-muted">No items</td>
-                                <td>₱{{ "%.2f"|format(shipment_fee) }}</td>
-                                <td><strong>₱{{ "%.2f"|format(invoice.get('total_amount', 0)) }}</strong></td>
-                                <td>{{ invoice.get('invoice_date', '-') }}</td>
-                                <td>
-                                    <div style="display: flex; gap: 0.5rem; flex-direction: column;">
-                                        <button class="btn btn-sm btn-primary" onclick="viewInvoice('{{ invoice.get('invoice_number', '') }}', [], '{{ invoice.get('customer_name', '') }}', '{{ invoice.get('invoice_date', '') }}', {{ invoice.get('total_amount', 0) }}, {{ shipment_fee }})">
+                                <td style="text-align: center;">₱{{ "%.2f"|format(shipment_fee) }}</td>
+                                <td style="text-align: center;"><strong>₱{{ "%.2f"|format(invoice.get('total_amount', 0)) }}</strong></td>
+                                <td style="text-align: center;">{{ invoice.get('invoice_date', '-') }}</td>
+                                <td style="text-align: center;">
+                                    <div style="display: flex; gap: 0.5rem; flex-direction: column; align-items: center;">
+                                        <button class="btn btn-sm btn-primary" onclick="viewInvoice('{{ invoice.get('invoice_number', '')|e }}', [], '{{ invoice.get('customer_name', '')|e }}', '{{ invoice.get('invoice_date', '')|e }}', {{ invoice.get('total_amount', 0) }}, {{ shipment_fee }})">
                                             View
                                         </button>
-                                        <button class="btn btn-sm btn-danger" onclick="deleteInvoice('{{ invoice.get('invoice_number', '') }}')">
+                                        <button class="btn btn-sm btn-danger" onclick="deleteInvoice('{{ invoice.get('invoice_number', '')|e }}')">
                                             Delete
                                         </button>
                                     </div>
@@ -233,14 +233,11 @@
         <span class="close" onclick="closeViewInvoiceModal()">&times;</span>
         <div class="invoice-view-header">
             <h2>INVOICE</h2>
+            <div class="invoice-customer-name" id="viewCustomerNameTop"></div>
             <p id="viewInvoiceNumber" class="invoice-number"></p>
         </div>
         
         <div class="invoice-view-info">
-            <div class="invoice-view-info-block">
-                <h3>Bill To:</h3>
-                <p id="viewCustomerName"></p>
-            </div>
             <div class="invoice-view-info-block">
                 <h3>Invoice Date:</h3>
                 <p id="viewInvoiceDate"></p>
@@ -407,8 +404,20 @@
     font-weight: 700;
 }
 
+.invoice-customer-name {
+    font-size: 28px;
+    color: #4b0082;
+    margin: 20px 0 10px 0;
+    font-weight: 700;
+    text-align: center;
+    padding: 15px;
+    background: linear-gradient(135deg, #f5f0ff 0%, #e6e6fa 100%);
+    border-radius: 8px;
+    border: 2px solid #d8bfd8;
+}
+
 .invoice-number {
-    font-size: 24px;
+    font-size: 20px;
     color: #9370db;
     margin-top: 10px;
     font-weight: 600;
@@ -463,7 +472,7 @@
 .invoice-view-table th {
     color: #4b0082;
     padding: 15px;
-    text-align: left;
+    text-align: center;
     font-weight: 600;
     font-size: 14px;
     text-transform: uppercase;
@@ -824,20 +833,24 @@ function createInvoice(event) {
 function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmount, shipmentFee) {
     let itemsList = [];
     try {
-        if (typeof items === 'string') {
+        // Handle different input types safely
+        if (items === null || items === undefined) {
+            itemsList = [];
+        } else if (typeof items === 'string') {
             // Try JSON first
             try {
-                itemsList = JSON.parse(items);
+                const parsed = JSON.parse(items);
+                itemsList = Array.isArray(parsed) ? parsed : [];
             } catch (jsonError) {
-                // If JSON fails, try to parse as Python string representation
-                console.log('JSON parse failed, trying alternative parsing for:', items);
+                // If JSON fails, check if it's an empty string or invalid
+                console.warn('Could not parse items as JSON:', jsonError);
                 itemsList = [];
             }
         } else if (Array.isArray(items)) {
             itemsList = items;
         } else if (items && typeof items === 'object') {
-            // Handle case where items might be an object
-            itemsList = Object.values(items);
+            // Handle case where items might be an object - convert to array
+            itemsList = Object.values(items).filter(v => v !== null && v !== undefined);
         }
         
         // Ensure itemsList is an array and has valid structure
@@ -846,11 +859,17 @@ function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmoun
         }
         
         // Validate each item has required fields
-        itemsList = itemsList.filter(item => item && (item.name || item.product_name));
+        itemsList = itemsList.filter(item => {
+            if (!item || typeof item !== 'object') return false;
+            return (item.name || item.product_name) && 
+                   (item.price !== undefined) && 
+                   (item.quantity !== undefined) && 
+                   (item.subtotal !== undefined);
+        });
         
-        console.log('Parsed items:', itemsList);
+        console.log('Parsed items successfully:', itemsList.length, 'items');
     } catch(e) {
-        console.error('Error parsing items:', e, 'Items data:', items);
+        console.error('Error parsing items:', e);
         itemsList = [];
     }
     
@@ -863,7 +882,7 @@ function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmoun
     
     // Populate modal
     document.getElementById('viewInvoiceNumber').textContent = invoiceNumber;
-    document.getElementById('viewCustomerName').textContent = customerName;
+    document.getElementById('viewCustomerNameTop').textContent = customerName;
     document.getElementById('viewInvoiceDate').textContent = invoiceDate;
     
     // Populate items table
@@ -875,12 +894,17 @@ function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmoun
     } else {
         itemsList.forEach((item, index) => {
             const row = document.createElement('tr');
+            const itemName = item.name || item.product_name || 'N/A';
+            const itemPrice = parseFloat(item.price || 0);
+            const itemQuantity = parseInt(item.quantity || 0);
+            const itemSubtotal = parseFloat(item.subtotal || 0);
+            
             row.innerHTML = `
-                <td>${index + 1}</td>
-                <td>${item.name}</td>
-                <td>${item.quantity}</td>
-                <td>₱${parseFloat(item.price).toFixed(2)}</td>
-                <td>₱${parseFloat(item.subtotal).toFixed(2)}</td>
+                <td style="text-align: center;">${index + 1}</td>
+                <td style="text-align: center;">${escapeHtml(itemName)}</td>
+                <td style="text-align: center;">${itemQuantity}</td>
+                <td style="text-align: center;">₱${itemPrice.toFixed(2)}</td>
+                <td style="text-align: center;">₱${itemSubtotal.toFixed(2)}</td>
             `;
             itemsTableBody.appendChild(row);
         });
@@ -904,6 +928,13 @@ function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmoun
     
     // Show modal
     document.getElementById('viewInvoiceModal').style.display = 'block';
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 function closeViewInvoiceModal() {
