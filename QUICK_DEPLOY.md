@@ -7,32 +7,16 @@
 - [x] Procfile ready for Railway
 - [x] railway.json configured
 - [x] App configured for Railway PORT
+- [x] GitHub repository created: `https://github.com/Daphne-CPAdmin/Personal-Stocks-INV`
+- [x] Code pushed to GitHub
 
 ## Next Steps
 
-### 1. ✅ GitHub Repository Created
+### 1. ✅ GitHub Repository Created & Pushed
 
 **Repository:** `https://github.com/Daphne-CPAdmin/Personal-Stocks-INV`
 
-### 2. Push to GitHub
-
-Run these commands to push your code:
-
-```bash
-git branch -M main
-git push -u origin main
-```
-
-**Note:** The remote is already configured. If you need to verify:
-```bash
-git remote -v
-```
-
-You should see:
-```
-origin	https://github.com/Daphne-CPAdmin/Personal-Stocks-INV (fetch)
-origin	https://github.com/Daphne-CPAdmin/Personal-Stocks-INV (push)
-```
+Your code is now on GitHub! You can view it at: https://github.com/Daphne-CPAdmin/Personal-Stocks-INV
 
 ### 3. Deploy to Railway
 
