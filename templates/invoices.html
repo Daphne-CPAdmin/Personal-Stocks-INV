@@ -16,7 +16,6 @@
                 <tr>
                     <th>Invoice #</th>
                     <th>Customer Name</th>
-                    <th>Products Summary</th>
                     <th>Product Name</th>
                     <th>Price Sold</th>
                     <th>Quantity</th>
@@ -47,19 +46,6 @@
                                 </td>
                                 <td rowspan="{{ items_list|length }}" style="vertical-align: top; padding-top: 1rem;">
                                     {{ invoice.get('customer_name', 'N/A') }}
-                                </td>
-                                <td rowspan="{{ items_list|length }}" style="vertical-align: top; padding-top: 1rem;">
-                                    {% if products_summary and products_summary != 'No items' %}
-                                        <div style="max-width: 400px; font-size: 0.875rem; line-height: 1.6;">
-                                            {% for product_line in products_summary.split('; ') %}
-                                                <div style="margin-bottom: 0.25rem;">
-                                                    {{ product_line }}
-                                                </div>
-                                            {% endfor %}
-                                        </div>
-                                    {% else %}
-                                        <span class="text-muted">No items</span>
-                                    {% endif %}
                                 </td>
                                 {% endif %}
                                 <td>{{ item.get('name', 'N/A') }}</td>
@@ -93,16 +79,7 @@
                             <tr>
                                 <td><strong>{{ invoice.get('invoice_number', 'N/A') }}</strong></td>
                                 <td>{{ invoice.get('customer_name', 'N/A') }}</td>
-                                <td>
-                                    {% if products_summary and products_summary != 'No items' %}
-                                        <div style="max-width: 400px; font-size: 0.875rem; line-height: 1.6;">
-                                            {{ products_summary }}
-                                        </div>
-                                    {% else %}
-                                        <span class="text-muted">No items</span>
-                                    {% endif %}
-                                </td>
-                                <td colspan="4" class="text-center text-muted">No items</td>
+                                <td colspan="3" class="text-center text-muted">No items</td>
                                 <td>₱{{ "%.2f"|format(shipment_fee) }}</td>
                                 <td><strong>₱{{ "%.2f"|format(invoice.get('total_amount', 0)) }}</strong></td>
                                 <td>{{ invoice.get('invoice_date', '-') }}</td>
@@ -121,7 +98,7 @@
                     {% endfor %}
                 {% else %}
                     <tr>
-                        <td colspan="11" class="text-center">No invoices yet. Create your first invoice!</td>
+                        <td colspan="10" class="text-center">No invoices yet. Create your first invoice!</td>
                     </tr>
                 {% endif %}
             </tbody>
