@@ -70,12 +70,18 @@ class DataConnector:
     def read_from_sheets(self, url):
         """Read data from Google Sheets"""
         if not self.client:
-            raise ValueError("Google Sheets client not initialized. Check credentials.")
+            logger.warning("Google Sheets client not initialized. Check GOOGLE_CREDENTIALS_PATH or GOOGLE_CREDENTIALS_JSON environment variable.")
+            return pd.DataFrame()
+        
+        if not url:
+            logger.warning("No URL provided for Google Sheets")
+            return pd.DataFrame()
         
         try:
             spreadsheet_id, gid = self._extract_sheet_info(url)
             if not spreadsheet_id:
-                raise ValueError("Could not extract spreadsheet ID from URL")
+                logger.error(f"Could not extract spreadsheet ID from URL: {url}")
+                return pd.DataFrame()
             
             spreadsheet = self.client.open_by_key(spreadsheet_id)
             worksheet = spreadsheet.get_worksheet_by_id(int(gid))
@@ -85,6 +91,7 @@ class DataConnector:
             
             if not data:
                 # Return empty DataFrame
+                logger.info("No data found in sheet (empty sheet)")
                 return pd.DataFrame()
             
             df = pd.DataFrame(data)
@@ -93,18 +100,24 @@ class DataConnector:
             logger.info(f"Read {len(df)} rows from Google Sheets")
             return df
         except Exception as e:
-            logger.error(f"Error reading from Google Sheets: {str(e)}")
-            raise
+            logger.error(f"Error reading from Google Sheets (URL: {url}): {str(e)}", exc_info=True)
+            return pd.DataFrame()  # Return empty DataFrame instead of raising
     
     def write_to_sheets(self, df, url):
         """Write DataFrame to Google Sheets"""
         if not self.client:
-            raise ValueError("Google Sheets client not initialized. Check credentials.")
+            logger.warning("Google Sheets client not initialized. Check GOOGLE_CREDENTIALS_PATH or GOOGLE_CREDENTIALS_JSON environment variable.")
+            return False
+        
+        if not url:
+            logger.warning("No URL provided for Google Sheets")
+            return False
         
         try:
             spreadsheet_id, gid = self._extract_sheet_info(url)
             if not spreadsheet_id:
-                raise ValueError("Could not extract spreadsheet ID from URL")
+                logger.error(f"Could not extract spreadsheet ID from URL: {url}")
+                return False
             
             spreadsheet = self.client.open_by_key(spreadsheet_id)
             worksheet = spreadsheet.get_worksheet_by_id(int(gid))
@@ -122,7 +135,8 @@ class DataConnector:
                 worksheet.append_row(values)
             
             logger.info(f"Wrote {len(df)} rows to Google Sheets")
+            return True
         except Exception as e:
-            logger.error(f"Error writing to Google Sheets: {str(e)}")
-            raise
+            logger.error(f"Error writing to Google Sheets (URL: {url}): {str(e)}", exc_info=True)
+            return False  # Return False instead of raising
 
