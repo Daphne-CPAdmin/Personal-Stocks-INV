@@ -207,13 +207,7 @@
 </style>
 <script>
 // Store product names from server
-const allProducts = [
-    {% if product_names %}
-        {% for product_name in product_names %}
-        "{{ product_name|e }}",
-        {% endfor %}
-    {% endif %}
-].filter(p => p); // Remove empty strings
+const allProducts = {% if product_names %}{{ product_names|tojson }}{% else %}[]{% endif %}.filter(p => p && p.trim()); // Remove empty strings
 
 let selectedProductIndex = -1;
 
@@ -248,10 +242,12 @@ function filterProducts() {
     let html = '';
     displayMatches.forEach((product, index) => {
         const highlighted = product.replace(
-            new RegExp(`(${query})`, 'gi'),
+            new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'),
             '<strong>$1</strong>'
         );
-        html += `<div class="autocomplete-suggestion" data-index="${index}" data-product="${product.replace(/"/g, '&quot;')}" onclick="selectProduct('${product.replace(/'/g, "\\'")}')">${highlighted}</div>`;
+        // Escape quotes for HTML attribute (only " needs escaping in HTML attributes)
+        const escapedProduct = product.replace(/"/g, '&quot;');
+        html += `<div class="autocomplete-suggestion" data-index="${index}" data-product="${escapedProduct}" onclick="selectProductFromData(this)">${highlighted}</div>`;
     });
     
     suggestionsDiv.innerHTML = html;
@@ -266,6 +262,11 @@ function selectProduct(productName) {
     selectedProductIndex = -1;
 }
 
+function selectProductFromData(element) {
+    const productName = element.getAttribute('data-product');
+    selectProduct(productName);
+}
+
 function showProductSuggestions() {
     const input = document.getElementById('productNameInput');
     if (input.value.trim().length > 0) {
@@ -276,7 +277,9 @@ function showProductSuggestions() {
         let html = '';
         const displayProducts = allProducts.slice(0, 7);
         displayProducts.forEach(product => {
-            html += `<div class="autocomplete-suggestion" onclick="selectProduct('${product.replace(/'/g, "\\'")}')">${product}</div>`;
+            // Escape quotes for HTML attribute
+            const escapedProduct = product.replace(/"/g, '&quot;');
+            html += `<div class="autocomplete-suggestion" data-product="${escapedProduct}" onclick="selectProductFromData(this)">${product}</div>`;
         });
         suggestionsDiv.innerHTML = html;
         suggestionsDiv.style.display = 'block';
