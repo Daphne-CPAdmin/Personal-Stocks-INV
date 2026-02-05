@@ -186,7 +186,12 @@ def update_status():
     """Update product status (used, freebie, raffled, sold)"""
     try:
         data = request.json
-        product_id = data.get('product_id')
+        # Convert product_id to int (might come as string from form)
+        try:
+            product_id = int(data.get('product_id'))
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'message': 'Invalid product ID. Please refresh the page and try again.'}), 400
+        
         new_status = data.get('status')
         selling_price = data.get('selling_price')
         quantity_used = int(data.get('quantity_used', 1))  # How many items were sold/used/given
@@ -195,36 +200,56 @@ def update_status():
         if INVENTORY_SHEET_URL:
             df = connector.read_from_sheets(INVENTORY_SHEET_URL)
             
-            # Update status
-            if product_id < len(df):
-                # Get current remaining quantity
-                if 'remaining_qty' in df.columns and pd.notna(df.at[product_id, 'remaining_qty']):
-                    current_remaining = int(df.at[product_id, 'remaining_qty'])
-                elif 'total_bought_quantity' in df.columns and pd.notna(df.at[product_id, 'total_bought_quantity']):
-                    current_remaining = int(df.at[product_id, 'total_bought_quantity'])
-                elif 'quantity' in df.columns and pd.notna(df.at[product_id, 'quantity']):
-                    current_remaining = int(df.at[product_id, 'quantity'])
-                else:
-                    current_remaining = 0
-                
-                # Decrement remaining_qty if status is sold, used, or freebie
-                if new_status in ['sold', 'used', 'freebie']:
-                    new_remaining = max(0, current_remaining - quantity_used)
-                    # Ensure remaining_qty column exists
-                    if 'remaining_qty' not in df.columns:
-                        df['remaining_qty'] = current_remaining
-                    df.at[product_id, 'remaining_qty'] = new_remaining
-                    # Update quantity to reflect remaining (if column exists)
-                    if 'quantity' in df.columns:
-                        df.at[product_id, 'quantity'] = new_remaining
-                
-                df.at[product_id, 'status'] = new_status
-                df.at[product_id, 'remarks'] = remarks
-                
-                if new_status == 'sold' and selling_price:
-                    selling_price = float(selling_price)
+            # Validate product_id is within bounds
+            if df.empty or product_id < 0 or product_id >= len(df):
+                return jsonify({'success': False, 'message': 'Product not found. Please refresh the page and try again.'}), 400
+            
+            # Helper functions to safely convert values from Google Sheets
+            def safe_int(value, default=0):
+                if pd.isna(value) or value is None or value == '':
+                    return default
+                try:
+                    return int(float(str(value)))  # Convert string -> float -> int to handle "2.0" cases
+                except (ValueError, TypeError):
+                    return default
+            
+            def safe_float(value, default=0.0):
+                if pd.isna(value) or value is None or value == '':
+                    return default
+                try:
+                    return float(str(value))
+                except (ValueError, TypeError):
+                    return default
+            
+            # Get current remaining quantity
+            if 'remaining_qty' in df.columns and pd.notna(df.at[product_id, 'remaining_qty']):
+                current_remaining = safe_int(df.at[product_id, 'remaining_qty'], 0)
+            elif 'total_bought_quantity' in df.columns and pd.notna(df.at[product_id, 'total_bought_quantity']):
+                current_remaining = safe_int(df.at[product_id, 'total_bought_quantity'], 0)
+            elif 'quantity' in df.columns and pd.notna(df.at[product_id, 'quantity']):
+                current_remaining = safe_int(df.at[product_id, 'quantity'], 0)
+            else:
+                current_remaining = 0
+            
+            # Decrement remaining_qty if status is sold, used, or freebie
+            if new_status in ['sold', 'used', 'freebie']:
+                new_remaining = max(0, current_remaining - quantity_used)
+                # Ensure remaining_qty column exists
+                if 'remaining_qty' not in df.columns:
+                    df['remaining_qty'] = current_remaining
+                df.at[product_id, 'remaining_qty'] = new_remaining
+                # Update quantity to reflect remaining (if column exists)
+                if 'quantity' in df.columns:
+                    df.at[product_id, 'quantity'] = new_remaining
+            
+            df.at[product_id, 'status'] = new_status
+            df.at[product_id, 'remarks'] = remarks
+            
+            if new_status == 'sold' and selling_price:
+                    
+                    selling_price = safe_float(selling_price, 0.0)
                     # Get total cost per unit and quantity used
-                    total_cost_per_unit = float(df.at[product_id, 'total_cost_per_unit'])
+                    total_cost_per_unit = safe_float(df.at[product_id, 'total_cost_per_unit'], 0.0)
                     # Total cost = total_cost_per_unit * quantity_used (not remaining quantity)
                     total_cost = total_cost_per_unit * quantity_used
                     profit = selling_price - total_cost
@@ -260,26 +285,27 @@ def update_status():
                         sold_df = pd.concat([sold_df, new_sold_df], ignore_index=True)
                         connector.write_to_sheets(sold_df, SOLD_ITEMS_SHEET_URL)
                 
-                # Track used/freebie items
-                if new_status in ['used', 'freebie']:
-                    if USED_FREEBIE_SHEET_URL:
-                        used_df = connector.read_from_sheets(USED_FREEBIE_SHEET_URL)
-                        if used_df.empty:
-                            used_df = pd.DataFrame(columns=['product_name', 'quantity', 'total_cost_per_unit', 'status', 'remarks', 'date_used'])
-                        used_item = {
-                            'product_name': df.at[product_id, 'product_name'],
-                            'quantity': quantity_used,
-                            'total_cost_per_unit': float(df.at[product_id, 'total_cost_per_unit']),
-                            'status': new_status,
-                            'remarks': remarks,
-                            'date_used': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                        }
-                        new_used_df = pd.DataFrame([used_item])
-                        used_df = pd.concat([used_df, new_used_df], ignore_index=True)
-                        connector.write_to_sheets(used_df, USED_FREEBIE_SHEET_URL)
-                
-                connector.write_to_sheets(df, INVENTORY_SHEET_URL)
-                logger.info(f"Updated product {product_id} status to {new_status}, remaining_qty: {df.at[product_id, 'remaining_qty']}")
+            # Track used/freebie items
+            if new_status in ['used', 'freebie']:
+                if USED_FREEBIE_SHEET_URL:
+                    used_df = connector.read_from_sheets(USED_FREEBIE_SHEET_URL)
+                    if used_df.empty:
+                        used_df = pd.DataFrame(columns=['product_name', 'quantity', 'total_cost_per_unit', 'status', 'remarks', 'date_used'])
+                    
+                    used_item = {
+                        'product_name': df.at[product_id, 'product_name'],
+                        'quantity': quantity_used,
+                        'total_cost_per_unit': safe_float(df.at[product_id, 'total_cost_per_unit'], 0.0),
+                        'status': new_status,
+                        'remarks': remarks,
+                        'date_used': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    }
+                    new_used_df = pd.DataFrame([used_item])
+                    used_df = pd.concat([used_df, new_used_df], ignore_index=True)
+                    connector.write_to_sheets(used_df, USED_FREEBIE_SHEET_URL)
+            
+            connector.write_to_sheets(df, INVENTORY_SHEET_URL)
+            logger.info(f"Updated product {product_id} status to {new_status}, remaining_qty: {df.at[product_id, 'remaining_qty']}")
             
         return jsonify({'success': True, 'message': 'Status updated successfully'})
     except KeyError as e:
