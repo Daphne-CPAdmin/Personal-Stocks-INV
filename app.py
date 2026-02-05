@@ -333,6 +333,38 @@ def invoices():
     today = datetime.now().strftime('%Y-%m-%d')
     return render_template('invoices.html', invoices=invoices, customers=customers, product_names=product_names, today=today)
 
+@app.errorhandler(500)
+def internal_error(error):
+    """Handle internal server errors"""
+    logger.error(f"Internal Server Error: {str(error)}", exc_info=True)
+    error_msg = "An internal error occurred. Please check Railway logs for details."
+    try:
+        return render_template('error.html', error_message=error_msg), 500
+    except:
+        # Fallback if error template doesn't exist
+        return f"<h1>Internal Server Error</h1><p>{error_msg}</p>", 500
+
+@app.errorhandler(404)
+def not_found(error):
+    """Handle 404 errors"""
+    logger.warning(f"404 Error: {str(error)}")
+    try:
+        return render_template('error.html', error_message="Page not found."), 404
+    except:
+        return "<h1>404 - Page Not Found</h1>", 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    """Handle internal server errors"""
+    logger.error(f"Internal Server Error: {str(error)}", exc_info=True)
+    return render_template('error.html', error_message="An internal error occurred. Please check the logs."), 500
+
+@app.errorhandler(404)
+def not_found(error):
+    """Handle 404 errors"""
+    logger.warning(f"404 Error: {str(error)}")
+    return render_template('error.html', error_message="Page not found."), 404
+
 @app.route('/api/create_invoice', methods=['POST'])
 def create_invoice():
     """Create a new invoice"""
