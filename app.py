@@ -426,8 +426,23 @@ def invoices():
             for invoice in invoices:
                 items_str = invoice.get('items', '[]')
                 try:
-                    invoice['items_parsed'] = json.loads(items_str) if isinstance(items_str, str) else items_str
-                except:
+                    if isinstance(items_str, str):
+                        # Try JSON first
+                        try:
+                            invoice['items_parsed'] = json.loads(items_str)
+                        except json.JSONDecodeError:
+                            # If JSON fails, try ast.literal_eval (for Python string representation)
+                            import ast
+                            try:
+                                invoice['items_parsed'] = ast.literal_eval(items_str)
+                            except (ValueError, SyntaxError):
+                                invoice['items_parsed'] = []
+                    elif isinstance(items_str, list):
+                        invoice['items_parsed'] = items_str
+                    else:
+                        invoice['items_parsed'] = []
+                except Exception as e:
+                    logger.warning(f"Error parsing items for invoice {invoice.get('invoice_number', 'unknown')}: {str(e)}")
                     invoice['items_parsed'] = []
         else:
             invoices = []
@@ -502,7 +517,7 @@ def create_invoice():
         new_invoice = {
             'invoice_number': invoice_number,
             'customer_name': customer_name,
-            'items': str(items),  # Store as string representation
+            'items': json.dumps(items),  # Store as JSON string for better parsing
             'shipment_fee': shipment_fee,
             'total_amount': total_amount,
             'invoice_date': invoice_date,

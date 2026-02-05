@@ -440,18 +440,32 @@
 }
 
 .invoice-view-table td {
-    padding: 12px 15px;
+    padding: 15px;
     border-bottom: 1px solid #e6e6fa;
     color: #333;
+    font-size: 15px;
+}
+
+.invoice-view-table tbody tr {
+    transition: all 0.2s ease;
 }
 
 .invoice-view-table tbody tr:hover {
     background-color: #f5f0ff;
-    transition: background-color 0.2s;
+    transform: translateX(2px);
+    box-shadow: 0 2px 4px rgba(147, 112, 219, 0.1);
 }
 
 .invoice-view-table tbody tr:last-child td {
     border-bottom: none;
+}
+
+.invoice-view-table tbody tr:nth-child(even) {
+    background-color: #faf9ff;
+}
+
+.invoice-view-table tbody tr:nth-child(even):hover {
+    background-color: #f5f0ff;
 }
 
 .invoice-view-totals {
@@ -780,11 +794,32 @@ function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmoun
     let itemsList = [];
     try {
         if (typeof items === 'string') {
-            itemsList = JSON.parse(items);
-        } else {
+            // Try JSON first
+            try {
+                itemsList = JSON.parse(items);
+            } catch (jsonError) {
+                // If JSON fails, try to parse as Python string representation
+                console.log('JSON parse failed, trying alternative parsing for:', items);
+                itemsList = [];
+            }
+        } else if (Array.isArray(items)) {
             itemsList = items;
+        } else if (items && typeof items === 'object') {
+            // Handle case where items might be an object
+            itemsList = Object.values(items);
         }
+        
+        // Ensure itemsList is an array and has valid structure
+        if (!Array.isArray(itemsList)) {
+            itemsList = [];
+        }
+        
+        // Validate each item has required fields
+        itemsList = itemsList.filter(item => item && (item.name || item.product_name));
+        
+        console.log('Parsed items:', itemsList);
     } catch(e) {
+        console.error('Error parsing items:', e, 'Items data:', items);
         itemsList = [];
     }
     
@@ -805,7 +840,7 @@ function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmoun
     itemsTableBody.innerHTML = '';
     
     if (itemsList.length === 0) {
-        itemsTableBody.innerHTML = '<tr><td colspan="4" class="text-center">No items</td></tr>';
+        itemsTableBody.innerHTML = '<tr><td colspan="5" class="text-center" style="padding: 30px; color: #999; font-style: italic;">No items in this invoice</td></tr>';
     } else {
         itemsList.forEach((item, index) => {
             const row = document.createElement('tr');
