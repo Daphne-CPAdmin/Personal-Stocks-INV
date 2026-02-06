@@ -388,16 +388,20 @@ def update_status():
             
             # Find the row by original_index column (stored before sorting)
             if 'original_index' in df.columns:
-                matching_rows = df[df['original_index'] == product_id]
+                # Convert product_id to same type as original_index for comparison
+                matching_rows = df[df['original_index'].astype(int) == int(product_id)]
                 if matching_rows.empty:
+                    logger.error(f"Product with original_index {product_id} not found. Available indices: {df['original_index'].tolist()}")
                     return jsonify({'success': False, 'message': 'Product not found. Please refresh the page and try again.'}), 400
                 # Get the actual DataFrame index of the matching row
                 actual_index = matching_rows.index[0]
+                logger.info(f"Found product: original_index={product_id}, actual_index={actual_index}, product_name={df.at[actual_index, 'product_name']}")
             else:
                 # Fallback: use product_id as direct index (for backward compatibility)
                 if product_id < 0 or product_id >= len(df):
                     return jsonify({'success': False, 'message': 'Product not found. Please refresh the page and try again.'}), 400
                 actual_index = product_id
+                logger.info(f"Using fallback: product_id={product_id}, product_name={df.at[actual_index, 'product_name']}")
             
             # Use actual_index for all DataFrame operations
             product_id = actual_index
