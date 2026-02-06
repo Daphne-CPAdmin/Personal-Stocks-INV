@@ -100,12 +100,13 @@
                 </div>
                 <div>
                     <div style="color: #6b7280; font-size: 0.75rem; margin-bottom: 0.25rem;">Remaining</div>
-                    <div style="color: {% if (summary.total_remaining / summary.total_quantity * 100) if summary.total_quantity > 0 else 0 > 50 %}#10b981{% elif (summary.total_remaining / summary.total_quantity * 100) if summary.total_quantity > 0 else 0 > 25 %}#f59e0b{% else %}#ef4444{% endif %}; font-size: 1.25rem; font-weight: 700;">{{ summary.total_remaining }}</div>
+                    {% set percentage = (summary.total_remaining / summary.total_quantity * 100) if summary.total_quantity > 0 else 0 %}
+                    <div style="color: {% if percentage > 50 %}#10b981{% elif percentage > 25 %}#f59e0b{% else %}#ef4444{% endif %}; font-size: 1.25rem; font-weight: 700;">{{ summary.total_remaining }}</div>
                 </div>
             </div>
             <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #c4b5fd;">
+                {% set percentage = (summary.total_remaining / summary.total_quantity * 100) if summary.total_quantity > 0 else 0 %}
                 <div style="background-color: #e5e7eb; border-radius: 0.25rem; height: 8px; position: relative; overflow: hidden;">
-                    {% set percentage = (summary.total_remaining / summary.total_quantity * 100) if summary.total_quantity > 0 else 0 %}
                     <div style="background-color: {% if percentage > 50 %}#10b981{% elif percentage > 25 %}#f59e0b{% else %}#ef4444{% endif %}; height: 100%; width: {{ percentage }}%; transition: width 0.3s;"></div>
                 </div>
                 <div style="color: #6b7280; font-size: 0.7rem; margin-top: 0.25rem; text-align: center;">{{ "%.1f"|format(percentage) }}% remaining</div>
