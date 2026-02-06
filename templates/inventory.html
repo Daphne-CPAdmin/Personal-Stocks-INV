@@ -20,7 +20,10 @@
                     <th>Quantity</th>
                     <th>Total Bought</th>
                     <th>Remaining</th>
+                    <th>Supplier</th>
+                    <th>Status</th>
                     <th>Date Added</th>
+                    <th>Remarks</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -45,9 +48,23 @@
                                 <span style="min-width: 30px; text-align: right; font-weight: 600; font-size: 0.8125rem;">{{ remaining }}</span>
                             </div>
                         </td>
+                        <td style="font-size: 0.75rem;">{{ item.get('supplier', '-') }}</td>
+                        <td style="font-size: 0.75rem;">
+                            {% set status = item.get('status', 'in_stock') %}
+                            <span style="padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-weight: 600; 
+                                {% if status == 'sold' %}background-color: #10b981; color: white;
+                                {% elif status == 'used' %}background-color: #f59e0b; color: white;
+                                {% elif status == 'freebie' %}background-color: #8b5cf6; color: white;
+                                {% elif status == 'raffled' %}background-color: #6366f1; color: white;
+                                {% else %}background-color: #e5e7eb; color: #374151;
+                                {% endif %}">
+                                {{ status.replace('_', ' ').title() }}
+                            </span>
+                        </td>
                         <td style="font-size: 0.75rem;">{{ item.get('date_added', '-') }}</td>
+                        <td style="font-size: 0.75rem; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ item.get('remarks', '-') }}">{{ item.get('remarks', '-') }}</td>
                         <td>
-                            <button class="btn btn-sm btn-secondary" onclick="openStatusModal({{ loop.index0 }}, '{{ item.get('product_name', '') }}', 'in_stock', {{ item.get('remaining_qty', item.get('quantity', 0)) }})" style="font-size: 0.75rem; padding: 0.4rem 0.8rem;">
+                            <button class="btn btn-sm btn-secondary" onclick="openStatusModal({{ loop.index0 }}, '{{ item.get('product_name', '')|e }}', '{{ item.get('status', 'in_stock')|e }}', {{ item.get('remaining_qty', item.get('quantity', 0)) }})" style="font-size: 0.75rem; padding: 0.4rem 0.8rem;">
                                 Update Status
                             </button>
                         </td>
@@ -55,13 +72,49 @@
                     {% endfor %}
                 {% else %}
                     <tr>
-                        <td colspan="8" class="text-center">No products in inventory. Add your first product!</td>
+                        <td colspan="12" class="text-center">No products in inventory. Add your first product!</td>
                     </tr>
                 {% endif %}
             </tbody>
         </table>
     </div>
 </div>
+
+<!-- Product Summary Cards -->
+{% if product_summary and product_summary|length > 0 %}
+<div class="card" style="margin-top: 2rem;">
+    <h3 style="margin-bottom: 1.5rem; color: #6b46c1; font-size: 1.25rem;">Product Summary (Consolidated by Product Name)</h3>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
+        {% for summary in product_summary %}
+        <div class="summary-card" style="background: linear-gradient(135deg, #e9d5ff 0%, #f3e8ff 100%); border: 2px solid #a855f7; border-radius: 0.75rem; padding: 1.25rem; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); transition: transform 0.2s, box-shadow 0.2s;">
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.75rem;">
+                <h4 style="margin: 0; color: #6b46c1; font-size: 1rem; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ summary.product_name }}">{{ summary.product_name }}</h4>
+                {% if summary.entry_count > 1 %}
+                <span style="background: #a855f7; color: white; padding: 0.25rem 0.5rem; border-radius: 0.5rem; font-size: 0.75rem; font-weight: 600; white-space: nowrap;">{{ summary.entry_count }} entries</span>
+                {% endif %}
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 0.75rem;">
+                <div>
+                    <div style="color: #6b7280; font-size: 0.75rem; margin-bottom: 0.25rem;">Total Quantity</div>
+                    <div style="color: #6b46c1; font-size: 1.25rem; font-weight: 700;">{{ summary.total_quantity }}</div>
+                </div>
+                <div>
+                    <div style="color: #6b7280; font-size: 0.75rem; margin-bottom: 0.25rem;">Remaining</div>
+                    <div style="color: {% if (summary.total_remaining / summary.total_quantity * 100) if summary.total_quantity > 0 else 0 > 50 %}#10b981{% elif (summary.total_remaining / summary.total_quantity * 100) if summary.total_quantity > 0 else 0 > 25 %}#f59e0b{% else %}#ef4444{% endif %}; font-size: 1.25rem; font-weight: 700;">{{ summary.total_remaining }}</div>
+                </div>
+            </div>
+            <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #c4b5fd;">
+                <div style="background-color: #e5e7eb; border-radius: 0.25rem; height: 8px; position: relative; overflow: hidden;">
+                    {% set percentage = (summary.total_remaining / summary.total_quantity * 100) if summary.total_quantity > 0 else 0 %}
+                    <div style="background-color: {% if percentage > 50 %}#10b981{% elif percentage > 25 %}#f59e0b{% else %}#ef4444{% endif %}; height: 100%; width: {{ percentage }}%; transition: width 0.3s;"></div>
+                </div>
+                <div style="color: #6b7280; font-size: 0.7rem; margin-top: 0.25rem; text-align: center;">{{ "%.1f"|format(percentage) }}% remaining</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
 
 <!-- Add Product Modal -->
 <div id="addProductModal" class="modal">
@@ -94,9 +147,15 @@
                     <input type="number" step="0.01" name="shipping_admin_fee" id="shippingAdminFeeInput" required>
                 </div>
             </div>
-            <div class="form-group">
-                <label>Quantity *</label>
-                <input type="number" name="quantity" id="quantityInput" value="1" required oninput="updateCalculatedCost()">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Quantity *</label>
+                    <input type="number" name="quantity" id="quantityInput" value="1" required oninput="calculateCostPerUnit()">
+                </div>
+                <div class="form-group">
+                    <label>Supplier</label>
+                    <input type="text" name="supplier" id="supplierInput" placeholder="Enter supplier name">
+                </div>
             </div>
             <div class="form-group" style="background-color: #f0f0f0; padding: 1rem; border-radius: 0.5rem;">
                 <strong>Calculated Total Cost Per Unit:</strong> 
@@ -407,6 +466,12 @@ function calculateCostPerUnit() {
 function addProduct(event) {
     event.preventDefault();
     
+    // Prevent double submission
+    const submitButton = event.target.querySelector('button[type="submit"]');
+    if (submitButton.disabled) {
+        return;
+    }
+    
     // Validate that a product is selected
     const productName = document.getElementById('productNameHidden').value;
     if (!productName || productName.trim() === '') {
@@ -414,6 +479,10 @@ function addProduct(event) {
         document.getElementById('productNameInput').focus();
         return;
     }
+    
+    // Disable submit button to prevent double entry
+    submitButton.disabled = true;
+    submitButton.textContent = 'Adding...';
     
     const formData = new FormData(event.target);
     const data = Object.fromEntries(formData);
@@ -433,10 +502,16 @@ function addProduct(event) {
             location.reload();
         } else {
             alert('Error: ' + result.message);
+            // Re-enable button on error
+            submitButton.disabled = false;
+            submitButton.textContent = 'Add Product';
         }
     })
     .catch(error => {
         alert('Error: ' + error);
+        // Re-enable button on error
+        submitButton.disabled = false;
+        submitButton.textContent = 'Add Product';
     });
 }
 
@@ -459,6 +534,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function updateStatus(event) {
     event.preventDefault();
+    
+    // Prevent double submission
+    const submitButton = event.target.querySelector('button[type="submit"]');
+    if (submitButton.disabled) {
+        return;
+    }
+    
+    // Disable submit button to prevent double entry
+    submitButton.disabled = true;
+    submitButton.textContent = 'Updating...';
+    
     const formData = new FormData(event.target);
     const data = Object.fromEntries(formData);
     
@@ -474,10 +560,16 @@ function updateStatus(event) {
             location.reload();
         } else {
             alert('Error: ' + result.message);
+            // Re-enable button on error
+            submitButton.disabled = false;
+            submitButton.textContent = 'Update Status';
         }
     })
     .catch(error => {
         alert('Error: ' + error);
+        // Re-enable button on error
+        submitButton.disabled = false;
+        submitButton.textContent = 'Update Status';
     });
 }
 

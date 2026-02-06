@@ -89,6 +89,7 @@ def inventory():
             if df.empty:
                 logger.info("Inventory sheet is empty")
                 inventory_items = []
+                product_summary_list = []
             else:
                 # Calculate remaining_qty if missing
                 if 'remaining_qty' not in df.columns:
@@ -119,15 +120,58 @@ def inventory():
                 # Format dates before converting to dict
                 if 'date_added' in df.columns:
                     df['date_added'] = df['date_added'].apply(format_date_custom)
+                if 'date_sold' in df.columns:
+                    df['date_sold'] = df['date_sold'].apply(format_date_custom)
+                
+                # Ensure all columns are present with defaults
+                required_cols = ['product_name', 'total_price', 'shipping_admin_fee', 'total_cost_per_unit', 
+                                'quantity', 'total_bought_quantity', 'remaining_qty', 'supplier', 
+                                'date_added', 'remarks', 'status', 'selling_price', 'profit', 
+                                'tithe', 'profit_after_tithe', 'date_sold']
+                for col in required_cols:
+                    if col not in df.columns:
+                        df[col] = None if col in ['remarks', 'status', 'supplier', 'date_sold'] else 0
                 
                 inventory_items = df.to_dict('records')
+                
+                # Calculate product summary (grouped by product_name) - optimized
+                product_summary = {}
+                for item in inventory_items:
+                    product_name = str(item.get('product_name', 'Unknown')).strip()
+                    if not product_name or product_name == 'Unknown':
+                        continue
+                    
+                    if product_name not in product_summary:
+                        product_summary[product_name] = {
+                            'product_name': product_name,
+                            'total_quantity': 0,
+                            'total_remaining': 0,
+                            'entry_count': 0
+                        }
+                    # Safely convert quantities - use vectorized operations where possible
+                    try:
+                        qty_val = item.get('quantity', 0)
+                        remaining_val = item.get('remaining_qty', qty_val)
+                        qty = int(float(str(qty_val))) if qty_val else 0
+                        remaining = int(float(str(remaining_val))) if remaining_val else 0
+                    except (ValueError, TypeError):
+                        qty = 0
+                        remaining = 0
+                    product_summary[product_name]['total_quantity'] += qty
+                    product_summary[product_name]['total_remaining'] += remaining
+                    product_summary[product_name]['entry_count'] += 1
+                
+                # Convert summary dict to list sorted by product name
+                product_summary_list = sorted(product_summary.values(), key=lambda x: x['product_name'].lower())
         else:
             inventory_items = []
+            product_summary_list = []
     except KeyError as e:
         # Handle missing column errors with user-friendly message
         missing_column = str(e).strip("'\"")
         logger.error(f"Error loading inventory: Missing column '{missing_column}' in spreadsheet", exc_info=True)
         inventory_items = []
+        product_summary_list = []
         flash(f"Your inventory spreadsheet is missing the '{missing_column}' column. Please add this column to your Google Sheet.", "error")
     except Exception as e:
         error_msg = str(e)
@@ -141,9 +185,10 @@ def inventory():
         
         logger.error(f"Error loading inventory: {error_msg}", exc_info=True)
         inventory_items = []
+        product_summary_list = []
         flash(user_msg, "error")
     
-    # Load product names from INDEX sheet product_name column for dropdown
+    # Load product names from INDEX sheet product_name column for dropdown (cached per request)
     product_names = []
     try:
         if INDEX_SHEET_URL:
@@ -164,7 +209,39 @@ def inventory():
         logger.warning(f"Could not load INDEX sheet: {str(e)}", exc_info=True)
         product_names = []
     
-    return render_template('inventory.html', items=inventory_items, product_names=product_names)
+    # Ensure product_summary_list is always defined (in case of errors above)
+    if 'product_summary_list' not in locals():
+        # Calculate product summary (grouped by product_name) if not already calculated
+        product_summary = {}
+        for item in inventory_items:
+            product_name = str(item.get('product_name', 'Unknown')).strip()
+            if not product_name or product_name == 'Unknown':
+                continue
+                
+            if product_name not in product_summary:
+                product_summary[product_name] = {
+                    'product_name': product_name,
+                    'total_quantity': 0,
+                    'total_remaining': 0,
+                    'entry_count': 0
+                }
+            # Safely convert quantities
+            try:
+                qty_val = item.get('quantity', 0)
+                remaining_val = item.get('remaining_qty', qty_val)
+                qty = int(float(str(qty_val))) if qty_val else 0
+                remaining = int(float(str(remaining_val))) if remaining_val else 0
+            except (ValueError, TypeError):
+                qty = 0
+                remaining = 0
+            product_summary[product_name]['total_quantity'] += qty
+            product_summary[product_name]['total_remaining'] += remaining
+            product_summary[product_name]['entry_count'] += 1
+        
+        # Convert summary dict to list sorted by product name
+        product_summary_list = sorted(product_summary.values(), key=lambda x: x['product_name'].lower())
+    
+    return render_template('inventory.html', items=inventory_items, product_names=product_names, product_summary=product_summary_list)
 
 @app.route('/api/add_product', methods=['POST'])
 def add_product():
@@ -175,6 +252,7 @@ def add_product():
         total_price = float(data.get('total_price', 0))
         shipping_admin_fee = float(data.get('shipping_admin_fee', 0))
         quantity = int(data.get('quantity', 1))
+        supplier = data.get('supplier', '')
         
         # Calculate total cost per unit: (total_price + shipping_admin_fee) / quantity
         total_cost_per_unit = (total_price + shipping_admin_fee) / quantity if quantity > 0 else 0
@@ -189,7 +267,15 @@ def add_product():
             'quantity': quantity,
             'total_bought_quantity': total_bought_quantity,
             'remaining_qty': remaining_qty,
-            'date_added': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            'supplier': supplier or '',
+            'date_added': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'remarks': '',
+            'status': 'in_stock',
+            'selling_price': None,
+            'profit': None,
+            'tithe': None,
+            'profit_after_tithe': None,
+            'date_sold': None
         }
         
         if INVENTORY_SHEET_URL:
@@ -197,24 +283,55 @@ def add_product():
             df = connector.read_from_sheets(INVENTORY_SHEET_URL)
             # Handle empty DataFrame - ensure all columns exist (matching your spreadsheet structure)
             if df.empty:
-                df = pd.DataFrame(columns=['product_name', 'total_price', 'shipping_admin_fee', 'total_cost_per_unit', 'quantity', 'total_bought_quantity', 'remaining_qty', 'date_added'])
+                df = pd.DataFrame(columns=['product_name', 'total_price', 'shipping_admin_fee', 'total_cost_per_unit', 'quantity', 'total_bought_quantity', 'remaining_qty', 'supplier', 'date_added', 'remarks', 'status', 'selling_price', 'profit', 'tithe', 'profit_after_tithe', 'date_sold'])
             else:
-                # Ensure new columns exist in existing DataFrame
-                if 'total_bought_quantity' not in df.columns:
-                    df['total_bought_quantity'] = df['quantity'] if 'quantity' in df.columns else 0
-                if 'remaining_qty' not in df.columns:
-                    if 'total_bought_quantity' in df.columns:
-                        df['remaining_qty'] = df['total_bought_quantity']
-                    elif 'quantity' in df.columns:
-                        df['remaining_qty'] = df['quantity']
-                    else:
-                        df['remaining_qty'] = 0
+                # Ensure all required columns exist in existing DataFrame
+                required_columns = ['product_name', 'total_price', 'shipping_admin_fee', 'total_cost_per_unit', 'quantity', 'total_bought_quantity', 'remaining_qty', 'supplier', 'date_added', 'remarks', 'status', 'selling_price', 'profit', 'tithe', 'profit_after_tithe', 'date_sold']
+                for col in required_columns:
+                    if col not in df.columns:
+                        df[col] = None
+                
+                # Ensure proper data types
+                numeric_cols = ['total_price', 'shipping_admin_fee', 'total_cost_per_unit', 'quantity', 'total_bought_quantity', 'remaining_qty', 'selling_price', 'profit', 'tithe', 'profit_after_tithe']
+                for col in numeric_cols:
+                    if col in df.columns:
+                        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                
+                # Check for duplicate entry (same product_name, total_price, shipping_admin_fee, quantity, supplier within last 2 minutes)
+                # This helps prevent accidental double entries - reduced time window for faster response
+                recent_time = (datetime.now() - pd.Timedelta(minutes=2)).strftime('%Y-%m-%d %H:%M:%S')
+                if 'date_added' in df.columns and len(df) > 0:
+                    df['date_added_parsed'] = pd.to_datetime(df['date_added'], errors='coerce')
+                    recent_mask = df['date_added_parsed'] >= pd.to_datetime(recent_time)
+                    recent_df = df[recent_mask]
+                    
+                    # Check for exact duplicates
+                    if len(recent_df) > 0:
+                        # Handle supplier comparison (can be None/NaN/empty string)
+                        supplier_col = recent_df['supplier'].fillna('') if 'supplier' in recent_df.columns else pd.Series([''] * len(recent_df))
+                        supplier_to_check = supplier if supplier else ''
+                        
+                        # Normalize numeric values for comparison (handle float precision issues)
+                        duplicate_mask = (
+                            (recent_df['product_name'].astype(str).str.strip() == str(product_name).strip()) &
+                            (abs(recent_df['total_price'].astype(float) - float(total_price)) < 0.01) &
+                            (abs(recent_df['shipping_admin_fee'].astype(float) - float(shipping_admin_fee)) < 0.01) &
+                            (recent_df['quantity'].astype(int) == int(quantity)) &
+                            (supplier_col.astype(str).str.strip() == str(supplier_to_check).strip())
+                        )
+                        
+                        if duplicate_mask.any():
+                            logger.warning(f"Potential duplicate entry detected for {product_name} (supplier: {supplier})")
+                            return jsonify({'success': False, 'message': 'A similar entry was added recently (within last 2 minutes). Please check if this is a duplicate.'}), 400
+                    
+                    df = df.drop('date_added_parsed', axis=1)
+            
             # Add new row using pd.concat (append is deprecated)
             new_df = pd.DataFrame([new_product])
             df = pd.concat([df, new_df], ignore_index=True)
             # Write back
             connector.write_to_sheets(df, INVENTORY_SHEET_URL)
-            logger.info(f"Added product: {product_name}")
+            logger.info(f"Added product: {product_name} (supplier: {supplier})")
         
         return jsonify({'success': True, 'message': 'Product added successfully'})
     except KeyError as e:
