@@ -420,6 +420,40 @@ def update_status():
                 if 'quantity' in df.columns:
                     df.at[product_id, 'quantity'] = new_remaining
             
+            # Track status history
+            import json
+            current_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            status_history_entry = {
+                'status': new_status,
+                'timestamp': current_timestamp,
+                'remarks': remarks,
+                'quantity_used': quantity_used
+            }
+            
+            # Get existing status history or initialize empty list
+            if 'status_history' not in df.columns:
+                df['status_history'] = ''
+            
+            existing_history = df.at[product_id, 'status_history']
+            if pd.isna(existing_history) or existing_history == '' or existing_history == 'nan':
+                history_list = []
+            else:
+                try:
+                    # Try to parse as JSON string
+                    if isinstance(existing_history, str):
+                        history_list = json.loads(existing_history)
+                    else:
+                        history_list = existing_history if isinstance(existing_history, list) else []
+                except (json.JSONDecodeError, ValueError, TypeError):
+                    history_list = []
+            
+            # Add new entry to history
+            history_list.append(status_history_entry)
+            
+            # Store history as JSON string
+            df.at[product_id, 'status_history'] = json.dumps(history_list)
+            
+            # Update current status
             df.at[product_id, 'status'] = new_status
             df.at[product_id, 'remarks'] = remarks
             

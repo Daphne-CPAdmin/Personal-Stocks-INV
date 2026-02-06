@@ -23,7 +23,6 @@
                     <th>Supplier</th>
                     <th>Status</th>
                     <th>Date Added</th>
-                    <th>Remarks</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -64,17 +63,16 @@
                             </span>
                         </td>
                         <td style="font-size: 0.75rem;">{{ item.get('date_added', '-') }}</td>
-                        <td style="font-size: 0.75rem; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ item.get('remarks', '-') }}">{{ item.get('remarks', '-') }}</td>
                         <td>
                             <button class="btn btn-sm btn-secondary" onclick="openStatusModal({{ loop.index0 }}, '{{ item.get('product_name', '')|e }}', '{{ item.get('status', 'in_stock')|e }}', {{ item.get('remaining_qty', item.get('quantity', 0)) }})" style="font-size: 0.75rem; padding: 0.4rem 0.8rem;">
-                                Update Status
+                                Update Inventory
                             </button>
                         </td>
                     </tr>
                     {% endfor %}
                 {% else %}
                     <tr>
-                        <td colspan="12" class="text-center">No products in inventory. Add your first product!</td>
+                        <td colspan="11" class="text-center">No products in inventory. Add your first product!</td>
                     </tr>
                 {% endif %}
             </tbody>
@@ -179,7 +177,7 @@
 <div id="statusModal" class="modal">
     <div class="modal-content">
         <span class="close" onclick="closeStatusModal()">&times;</span>
-        <h3>Update Product Status</h3>
+        <h3>Update Inventory</h3>
         <p><strong>Product:</strong> <span id="statusProductName"></span></p>
         <p><strong>Remaining Quantity:</strong> <span id="statusRemainingQty"></span></p>
         <form id="statusForm" onsubmit="updateStatus(event)">
@@ -209,7 +207,7 @@
             </div>
             <div class="form-actions">
                 <button type="button" class="btn btn-secondary" onclick="closeStatusModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Update Status</button>
+                <button type="submit" class="btn btn-primary">Update Inventory</button>
             </div>
         </form>
     </div>
@@ -565,7 +563,7 @@ function updateStatus(event) {
             alert('Error: ' + result.message);
             // Re-enable button on error
             submitButton.disabled = false;
-            submitButton.textContent = 'Update Status';
+            submitButton.textContent = 'Update Inventory';
         }
     })
     .catch(error => {
