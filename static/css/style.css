@@ -646,7 +646,32 @@ body::before {
 
 .summary-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 8px rgba(124, 58, 237, 0.25);
+}
+
+/* Responsive grid: 4 columns on large screens, fewer on smaller */
+.summary-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.75rem;
+}
+
+@media (max-width: 1200px) {
+    .summary-cards-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 900px) {
+    .summary-cards-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .summary-cards-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 

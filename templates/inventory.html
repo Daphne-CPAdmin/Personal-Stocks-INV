@@ -85,33 +85,33 @@
 <!-- Product Summary Cards -->
 {% if product_summary and product_summary|length > 0 %}
 <div class="card" style="margin-top: 2rem;">
-    <h3 style="margin-bottom: 1.5rem; color: #6b46c1; font-size: 1.25rem;">Product Summary (Consolidated by Product Name)</h3>
-    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
+    <h3 style="margin-bottom: 1rem; color: #4c1d95; font-size: 1.125rem; font-family: 'Merriweather', Georgia, serif; font-weight: 700;">Product Summary (Consolidated by Product Name)</h3>
+    <div class="summary-cards-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem;">
         {% for summary in product_summary %}
-        <div class="summary-card" style="background: linear-gradient(135deg, #e9d5ff 0%, #f3e8ff 100%); border: 2px solid #a855f7; border-radius: 0.75rem; padding: 1.25rem; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); transition: transform 0.2s, box-shadow 0.2s;">
-            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.75rem;">
-                <h4 style="margin: 0; color: #6b46c1; font-size: 1rem; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ summary.product_name }}">{{ summary.product_name }}</h4>
+        <div class="summary-card" style="background: linear-gradient(135deg, #e9d5ff 0%, #f3e8ff 100%); border: 2px solid #a78bfa; border-radius: 0.625rem; padding: 0.875rem; box-shadow: 0 2px 4px rgba(124, 58, 237, 0.15); transition: transform 0.2s, box-shadow 0.2s;">
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                <h4 style="margin: 0; color: #4c1d95; font-size: 0.8125rem; font-family: 'Merriweather', Georgia, serif; font-weight: 700; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3;" title="{{ summary.product_name }}">{{ summary.product_name }}</h4>
                 {% if summary.entry_count > 1 %}
-                <span style="background: #a855f7; color: white; padding: 0.25rem 0.5rem; border-radius: 0.5rem; font-size: 0.75rem; font-weight: 600; white-space: nowrap;">{{ summary.entry_count }} entries</span>
+                <span style="background: #7c3aed; color: white; padding: 0.125rem 0.375rem; border-radius: 0.375rem; font-size: 0.625rem; font-family: 'Merriweather', Georgia, serif; font-weight: 700; white-space: nowrap; margin-left: 0.25rem;">{{ summary.entry_count }}</span>
                 {% endif %}
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 0.75rem;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem;">
                 <div>
-                    <div style="color: #6b7280; font-size: 0.75rem; margin-bottom: 0.25rem;">Total Bought</div>
-                    <div style="color: #6b46c1; font-size: 1.25rem; font-weight: 700;">{{ summary.total_bought }}</div>
+                    <div style="color: #6b7280; font-size: 0.625rem; font-family: 'Merriweather', Georgia, serif; margin-bottom: 0.125rem;">Total Bought</div>
+                    <div style="color: #4c1d95; font-size: 1rem; font-family: 'Merriweather', Georgia, serif; font-weight: 900;">{{ summary.total_bought }}</div>
                 </div>
                 <div>
-                    <div style="color: #6b7280; font-size: 0.75rem; margin-bottom: 0.25rem;">Remaining</div>
+                    <div style="color: #6b7280; font-size: 0.625rem; font-family: 'Merriweather', Georgia, serif; margin-bottom: 0.125rem;">Remaining</div>
                     {% set percentage = (summary.total_remaining / summary.total_bought * 100) if summary.total_bought > 0 else 0 %}
-                    <div style="color: {% if percentage > 50 %}#10b981{% elif percentage > 25 %}#f59e0b{% else %}#ef4444{% endif %}; font-size: 1.25rem; font-weight: 700;">{{ summary.total_remaining }}</div>
+                    <div style="color: {% if percentage > 50 %}#10b981{% elif percentage > 25 %}#f59e0b{% else %}#ef4444{% endif %}; font-size: 1rem; font-family: 'Merriweather', Georgia, serif; font-weight: 900;">{{ summary.total_remaining }}</div>
                 </div>
             </div>
-            <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #c4b5fd;">
+            <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #c4b5fd;">
                 {% set percentage = (summary.total_remaining / summary.total_bought * 100) if summary.total_bought > 0 else 0 %}
-                <div style="background-color: #e5e7eb; border-radius: 0.25rem; height: 8px; position: relative; overflow: hidden;">
+                <div style="background-color: #e5e7eb; border-radius: 0.25rem; height: 6px; position: relative; overflow: hidden;">
                     <div style="background-color: {% if percentage > 50 %}#10b981{% elif percentage > 25 %}#f59e0b{% else %}#ef4444{% endif %}; height: 100%; width: {{ percentage }}%; transition: width 0.3s;"></div>
                 </div>
-                <div style="color: #6b7280; font-size: 0.7rem; margin-top: 0.25rem; text-align: center;">{{ "%.1f"|format(percentage) }}% remaining</div>
+                <div style="color: #6b7280; font-size: 0.625rem; font-family: 'Merriweather', Georgia, serif; margin-top: 0.25rem; text-align: center;">{{ "%.1f"|format(percentage) }}%</div>
             </div>
         </div>
         {% endfor %}
