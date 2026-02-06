@@ -628,14 +628,34 @@ def invoices():
                             'items_parsed': []
                         }
                     # Collect items for modal view
-                    product_name = row.get('product_name', '')
-                    if product_name:
-                        invoices_dict[invoice_num]['items_parsed'].append({
-                            'name': product_name,
-                            'price': float(row.get('price_sold', 0)),
-                            'quantity': int(row.get('quantity', 0)),
-                            'subtotal': float(row.get('line_total', 0))
-                        })
+                    product_name = str(row.get('product_name', '')).strip()
+                    price_sold = row.get('price_sold', 0)
+                    quantity = row.get('quantity', 0)
+                    line_total = row.get('line_total', 0)
+                    
+                    # Only add if product_name exists and is not empty
+                    if product_name and product_name.lower() not in ['', 'nan', 'none', 'n/a']:
+                        try:
+                            # Ensure numeric values are properly converted
+                            price_val = float(price_sold) if price_sold else 0
+                            qty_val = int(quantity) if quantity else 0
+                            subtotal_val = float(line_total) if line_total else (price_val * qty_val)
+                            
+                            invoices_dict[invoice_num]['items_parsed'].append({
+                                'name': product_name,
+                                'price': price_val,
+                                'quantity': qty_val,
+                                'subtotal': subtotal_val
+                            })
+                        except (ValueError, TypeError) as e:
+                            logger.warning(f"Error parsing invoice item for {invoice_num}: {str(e)}")
+                            # Still add the item with default values
+                            invoices_dict[invoice_num]['items_parsed'].append({
+                                'name': product_name,
+                                'price': 0,
+                                'quantity': 0,
+                                'subtotal': 0
+                            })
                 invoices = list(invoices_dict.values())
         else:
             invoices = []

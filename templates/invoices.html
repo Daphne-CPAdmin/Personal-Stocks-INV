@@ -66,7 +66,7 @@
                                     <div style="display: flex; gap: 0.5rem; flex-direction: column; align-items: center;">
                                         <button class="btn btn-sm btn-primary view-invoice-btn" 
                                                 data-invoice-number="{{ invoice.get('invoice_number', '')|e }}"
-                                                data-items="{{ invoice.get('items_parsed', [])|tojson|safe }}"
+                                                data-items='{{ invoice.get('items_parsed', [])|tojson }}'
                                                 data-customer-name="{{ invoice.get('customer_name', '')|e }}"
                                                 data-invoice-date="{{ invoice.get('invoice_date', '')|e }}"
                                                 data-total-amount="{{ invoice.get('total_amount', 0) }}"
@@ -95,7 +95,7 @@
                                     <div style="display: flex; gap: 0.5rem; flex-direction: column; align-items: center;">
                                         <button class="btn btn-sm btn-primary view-invoice-btn" 
                                                 data-invoice-number="{{ invoice.get('invoice_number', '')|e }}"
-                                                data-items="[]"
+                                                data-items='{{ invoice.get('items_parsed', [])|tojson }}'
                                                 data-customer-name="{{ invoice.get('customer_name', '')|e }}"
                                                 data-invoice-date="{{ invoice.get('invoice_date', '')|e }}"
                                                 data-total-amount="{{ invoice.get('total_amount', 0) }}"
@@ -1036,45 +1036,80 @@ function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmoun
     if (typeof isPaid === 'undefined') isPaid = false;
     if (typeof isFulfilled === 'undefined') isFulfilled = false;
     
+    console.log('viewInvoice called with:', {
+        invoiceNumber,
+        items,
+        itemsType: typeof items,
+        itemsIsArray: Array.isArray(items),
+        customerName,
+        invoiceDate,
+        totalAmount,
+        shipmentFee
+    });
+    
     let itemsList = [];
     try {
         // Handle different input types safely
         if (items === null || items === undefined) {
+            console.warn('Items is null or undefined');
             itemsList = [];
         } else if (typeof items === 'string') {
             // Try JSON first
             try {
-                const parsed = JSON.parse(items);
+                // Handle HTML entity encoding
+                const cleanedItems = items.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+                const parsed = JSON.parse(cleanedItems);
                 itemsList = Array.isArray(parsed) ? parsed : [];
+                console.log('Parsed string items:', itemsList);
             } catch (jsonError) {
-                // If JSON fails, check if it's an empty string or invalid
-                console.warn('Could not parse items as JSON:', jsonError);
+                console.warn('Could not parse items as JSON:', jsonError, 'Raw string:', items);
                 itemsList = [];
             }
         } else if (Array.isArray(items)) {
             itemsList = items;
+            console.log('Items is already an array:', itemsList);
         } else if (items && typeof items === 'object') {
             // Handle case where items might be an object - convert to array
             itemsList = Object.values(items).filter(v => v !== null && v !== undefined);
+            console.log('Converted object to array:', itemsList);
         }
         
         // Ensure itemsList is an array and has valid structure
         if (!Array.isArray(itemsList)) {
+            console.warn('itemsList is not an array:', itemsList);
             itemsList = [];
         }
         
-        // Validate each item has required fields
-        itemsList = itemsList.filter(item => {
-            if (!item || typeof item !== 'object') return false;
-            return (item.name || item.product_name) && 
-                   (item.price !== undefined) && 
-                   (item.quantity !== undefined) && 
-                   (item.subtotal !== undefined);
-        });
+        // Validate each item has required fields - be more lenient
+        itemsList = itemsList.map(item => {
+            if (!item || typeof item !== 'object') {
+                console.warn('Invalid item:', item);
+                return null;
+            }
+            // Normalize field names
+            const itemName = item.name || item.product_name || '';
+            const itemPrice = parseFloat(item.price || item.price_sold || 0);
+            const itemQty = parseInt(item.quantity || item.qty || 0);
+            const itemSubtotal = parseFloat(item.subtotal || item.line_total || (itemPrice * itemQty));
+            
+            // Only filter out if name is completely missing
+            if (!itemName || itemName === 'N/A' || itemName.trim() === '') {
+                console.warn('Skipping item with no name:', item);
+                return null;
+            }
+            
+            const normalizedItem = {
+                name: itemName,
+                price: itemPrice,
+                quantity: itemQty,
+                subtotal: itemSubtotal
+            };
+            return normalizedItem;
+        }).filter(item => item !== null && item.name && item.name.trim() !== '');
         
-        console.log('Parsed items successfully:', itemsList.length, 'items');
+        console.log('Final processed items:', itemsList.length, 'items', itemsList);
     } catch(e) {
-        console.error('Error parsing items:', e);
+        console.error('Error parsing items:', e, e.stack);
         itemsList = [];
     }
     
@@ -1494,7 +1529,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.view-invoice-btn').forEach(button => {
         button.addEventListener('click', function() {
             const invoiceNumber = this.getAttribute('data-invoice-number');
-            const itemsJson = this.getAttribute('data-items');
+            let itemsJson = this.getAttribute('data-items');
             const customerName = this.getAttribute('data-customer-name');
             const invoiceDate = this.getAttribute('data-invoice-date');
             const totalAmount = parseFloat(this.getAttribute('data-total-amount') || 0);
@@ -1504,9 +1539,14 @@ document.addEventListener('DOMContentLoaded', function() {
             
             let items = [];
             try {
+                // Handle HTML entity encoding (e.g., &quot; -> ")
+                if (itemsJson) {
+                    itemsJson = itemsJson.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+                }
                 items = JSON.parse(itemsJson || '[]');
+                console.log('Parsed items from button:', items);
             } catch(e) {
-                console.error('Error parsing items:', e);
+                console.error('Error parsing items:', e, 'Raw itemsJson:', itemsJson);
                 items = [];
             }
             
