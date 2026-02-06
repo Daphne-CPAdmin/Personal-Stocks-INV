@@ -154,20 +154,20 @@ def inventory():
                     if product_name not in product_summary:
                         product_summary[product_name] = {
                             'product_name': product_name,
-                            'total_quantity': 0,
+                            'total_bought': 0,
                             'total_remaining': 0,
                             'entry_count': 0
                         }
-                    # Safely convert quantities - use vectorized operations where possible
+                    # Safely convert quantities - use total_bought_quantity instead of quantity
                     try:
-                        qty_val = item.get('quantity', 0)
-                        remaining_val = item.get('remaining_qty', qty_val)
-                        qty = int(float(str(qty_val))) if qty_val else 0
+                        total_bought_val = item.get('total_bought_quantity', item.get('quantity', 0))
+                        remaining_val = item.get('remaining_qty', total_bought_val)
+                        total_bought = int(float(str(total_bought_val))) if total_bought_val else 0
                         remaining = int(float(str(remaining_val))) if remaining_val else 0
                     except (ValueError, TypeError):
-                        qty = 0
+                        total_bought = 0
                         remaining = 0
-                    product_summary[product_name]['total_quantity'] += qty
+                    product_summary[product_name]['total_bought'] += total_bought
                     product_summary[product_name]['total_remaining'] += remaining
                     product_summary[product_name]['entry_count'] += 1
                 
@@ -231,20 +231,20 @@ def inventory():
             if product_name not in product_summary:
                 product_summary[product_name] = {
                     'product_name': product_name,
-                    'total_quantity': 0,
+                    'total_bought': 0,
                     'total_remaining': 0,
                     'entry_count': 0
                 }
-            # Safely convert quantities
+            # Safely convert quantities - use total_bought_quantity instead of quantity
             try:
-                qty_val = item.get('quantity', 0)
-                remaining_val = item.get('remaining_qty', qty_val)
-                qty = int(float(str(qty_val))) if qty_val else 0
+                total_bought_val = item.get('total_bought_quantity', item.get('quantity', 0))
+                remaining_val = item.get('remaining_qty', total_bought_val)
+                total_bought = int(float(str(total_bought_val))) if total_bought_val else 0
                 remaining = int(float(str(remaining_val))) if remaining_val else 0
             except (ValueError, TypeError):
-                qty = 0
+                total_bought = 0
                 remaining = 0
-            product_summary[product_name]['total_quantity'] += qty
+            product_summary[product_name]['total_bought'] += total_bought
             product_summary[product_name]['total_remaining'] += remaining
             product_summary[product_name]['entry_count'] += 1
         
