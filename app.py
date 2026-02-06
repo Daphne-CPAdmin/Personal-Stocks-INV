@@ -607,6 +607,14 @@ def invoices():
                 for _, row in df.iterrows():
                     invoice_num = row.get('invoice_number', '')
                     if invoice_num not in invoices_dict:
+                        # Handle boolean conversion for paid/fulfilled (may come as string from sheets)
+                        paid_val = row.get('paid', False)
+                        if isinstance(paid_val, str):
+                            paid_val = paid_val.lower() in ['true', '1', 'yes']
+                        fulfilled_val = row.get('fulfilled', False)
+                        if isinstance(fulfilled_val, str):
+                            fulfilled_val = fulfilled_val.lower() in ['true', '1', 'yes']
+                        
                         invoices_dict[invoice_num] = {
                             'invoice_number': invoice_num,
                             'customer_name': row.get('customer_name', ''),
@@ -615,6 +623,8 @@ def invoices():
                             'total_amount': row.get('total_amount', 0),
                             'invoice_date': row.get('invoice_date', ''),
                             'created_at': row.get('created_at', ''),
+                            'paid': bool(paid_val),
+                            'fulfilled': bool(fulfilled_val),
                             'items_parsed': []
                         }
                     # Collect items for modal view
@@ -722,7 +732,9 @@ def create_invoice():
                 'shipment_fee': shipment_fee,
                 'total_amount': total_amount,
                 'invoice_date': invoice_date,
-                'created_at': created_at
+                'created_at': created_at,
+                'paid': False,
+                'fulfilled': False
             }
             invoice_rows.append(invoice_row)
         
@@ -739,7 +751,9 @@ def create_invoice():
                 'shipment_fee': shipment_fee,
                 'total_amount': total_amount,
                 'invoice_date': invoice_date,
-                'created_at': created_at
+                'created_at': created_at,
+                'paid': False,
+                'fulfilled': False
             }
             invoice_rows.append(invoice_row)
         
@@ -747,7 +761,12 @@ def create_invoice():
             df = connector.read_from_sheets(INVOICES_SHEET_URL)
             # Handle empty DataFrame
             if df.empty:
-                df = pd.DataFrame(columns=['invoice_number', 'customer_name', 'products_summary', 'product_name', 'price_sold', 'quantity', 'line_total', 'shipment_fee', 'total_amount', 'invoice_date', 'created_at'])
+                df = pd.DataFrame(columns=['invoice_number', 'customer_name', 'products_summary', 'product_name', 'price_sold', 'quantity', 'line_total', 'shipment_fee', 'total_amount', 'invoice_date', 'created_at', 'paid', 'fulfilled'])
+            # Ensure paid and fulfilled columns exist
+            if 'paid' not in df.columns:
+                df['paid'] = False
+            if 'fulfilled' not in df.columns:
+                df['fulfilled'] = False
             new_invoice_df = pd.DataFrame(invoice_rows)
             df = pd.concat([df, new_invoice_df], ignore_index=True)
             connector.write_to_sheets(df, INVOICES_SHEET_URL)
@@ -813,6 +832,48 @@ def create_invoice():
         return jsonify({'success': True, 'message': 'Invoice created successfully', 'invoice_number': invoice_number})
     except Exception as e:
         logger.error(f"Error creating invoice: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)}), 400
+
+@app.route('/api/update_invoice_status', methods=['POST'])
+def update_invoice_status():
+    """Update invoice paid/fulfilled status"""
+    try:
+        data = request.json
+        invoice_number = data.get('invoice_number')
+        status_type = data.get('status_type')  # 'paid' or 'fulfilled'
+        status_value = data.get('status_value', True)  # True/False
+        
+        if not invoice_number or not status_type:
+            return jsonify({'success': False, 'message': 'Invoice number and status type are required'}), 400
+        
+        if status_type not in ['paid', 'fulfilled']:
+            return jsonify({'success': False, 'message': 'Status type must be "paid" or "fulfilled"'}), 400
+        
+        if INVOICES_SHEET_URL:
+            df = connector.read_from_sheets(INVOICES_SHEET_URL)
+            if df.empty:
+                return jsonify({'success': False, 'message': 'Invoice not found'}), 404
+            
+            # Ensure columns exist
+            if status_type not in df.columns:
+                df[status_type] = False
+            
+            # Update all rows with this invoice number
+            mask = df['invoice_number'] == invoice_number
+            if not mask.any():
+                return jsonify({'success': False, 'message': 'Invoice not found'}), 404
+            
+            # Convert boolean properly
+            if isinstance(status_value, str):
+                status_value = status_value.lower() in ['true', '1', 'yes']
+            
+            df.loc[mask, status_type] = bool(status_value)
+            connector.write_to_sheets(df, INVOICES_SHEET_URL)
+            logger.info(f"Updated invoice {invoice_number} {status_type} status to {status_value}")
+        
+        return jsonify({'success': True, 'message': f'Invoice {status_type} status updated successfully'})
+    except Exception as e:
+        logger.error(f"Error updating invoice status: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'message': str(e)}), 400
 
 @app.route('/api/delete_invoice', methods=['POST'])

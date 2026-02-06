@@ -64,7 +64,15 @@
                                 </td>
                                 <td rowspan="{{ items_list|length }}" style="vertical-align: middle; text-align: center; padding-top: 1rem;">
                                     <div style="display: flex; gap: 0.5rem; flex-direction: column; align-items: center;">
-                                        <button class="btn btn-sm btn-primary" onclick="viewInvoice('{{ invoice.get('invoice_number', '')|e }}', {{ invoice.get('items_parsed', [])|tojson|safe }}, '{{ invoice.get('customer_name', '')|e }}', '{{ invoice.get('invoice_date', '')|e }}', {{ invoice.get('total_amount', 0) }}, {{ shipment_fee }})">
+                                        <button class="btn btn-sm btn-primary view-invoice-btn" 
+                                                data-invoice-number="{{ invoice.get('invoice_number', '')|e }}"
+                                                data-items="{{ invoice.get('items_parsed', [])|tojson|safe }}"
+                                                data-customer-name="{{ invoice.get('customer_name', '')|e }}"
+                                                data-invoice-date="{{ invoice.get('invoice_date', '')|e }}"
+                                                data-total-amount="{{ invoice.get('total_amount', 0) }}"
+                                                data-shipment-fee="{{ shipment_fee }}"
+                                                data-paid="{{ invoice.get('paid', False)|tojson }}"
+                                                data-fulfilled="{{ invoice.get('fulfilled', False)|tojson }}">
                                             View
                                         </button>
                                         <button class="btn btn-sm btn-danger" onclick="deleteInvoice('{{ invoice.get('invoice_number', '')|e }}')">
@@ -85,7 +93,15 @@
                                 <td style="text-align: center;">{{ invoice.get('invoice_date', '-') }}</td>
                                 <td style="text-align: center;">
                                     <div style="display: flex; gap: 0.5rem; flex-direction: column; align-items: center;">
-                                        <button class="btn btn-sm btn-primary" onclick="viewInvoice('{{ invoice.get('invoice_number', '')|e }}', [], '{{ invoice.get('customer_name', '')|e }}', '{{ invoice.get('invoice_date', '')|e }}', {{ invoice.get('total_amount', 0) }}, {{ shipment_fee }})">
+                                        <button class="btn btn-sm btn-primary view-invoice-btn" 
+                                                data-invoice-number="{{ invoice.get('invoice_number', '')|e }}"
+                                                data-items="[]"
+                                                data-customer-name="{{ invoice.get('customer_name', '')|e }}"
+                                                data-invoice-date="{{ invoice.get('invoice_date', '')|e }}"
+                                                data-total-amount="{{ invoice.get('total_amount', 0) }}"
+                                                data-shipment-fee="{{ shipment_fee }}"
+                                                data-paid="{{ invoice.get('paid', False)|tojson }}"
+                                                data-fulfilled="{{ invoice.get('fulfilled', False)|tojson }}">
                                             View
                                         </button>
                                         <button class="btn btn-sm btn-danger" onclick="deleteInvoice('{{ invoice.get('invoice_number', '')|e }}')">
@@ -229,30 +245,24 @@
 
 <!-- View Invoice Modal -->
 <div id="viewInvoiceModal" class="modal">
-    <div class="modal-content modal-large invoice-view-modal">
+    <div class="modal-content invoice-view-modal-compact">
         <span class="close" onclick="closeViewInvoiceModal()">&times;</span>
-        <div class="invoice-view-header">
+        <div class="invoice-view-header-compact">
             <h2>INVOICE</h2>
-            <div class="invoice-customer-name" id="viewCustomerNameTop"></div>
-            <p id="viewInvoiceNumber" class="invoice-number"></p>
+            <div class="invoice-customer-name-compact" id="viewCustomerNameTop"></div>
+            <p id="viewInvoiceNumber" class="invoice-number-compact"></p>
+            <p id="viewInvoiceDate" class="invoice-date-compact"></p>
         </div>
         
-        <div class="invoice-view-info">
-            <div class="invoice-view-info-block">
-                <h3>Invoice Date:</h3>
-                <p id="viewInvoiceDate"></p>
-            </div>
-        </div>
-        
-        <div class="invoice-view-table-container">
-            <table class="invoice-view-table">
+        <div class="invoice-view-table-container-compact">
+            <table class="invoice-view-table-compact">
                 <thead>
                     <tr>
                         <th>#</th>
-                        <th>Product Name</th>
-                        <th>Quantity</th>
-                        <th>Price Per Piece</th>
-                        <th>Subtotal</th>
+                        <th>Product</th>
+                        <th>Qty</th>
+                        <th>Price</th>
+                        <th>Line Total</th>
                     </tr>
                 </thead>
                 <tbody id="viewInvoiceItemsBody">
@@ -261,24 +271,31 @@
             </table>
         </div>
         
-        <div class="invoice-view-totals">
-            <div class="invoice-totals-row">
-                <span class="invoice-totals-label">Subtotal:</span>
-                <span class="invoice-totals-value" id="viewSubtotal">₱0.00</span>
+        <div class="invoice-view-totals-compact">
+            <div class="invoice-totals-row-compact">
+                <span class="invoice-totals-label-compact">Subtotal:</span>
+                <span class="invoice-totals-value-compact" id="viewSubtotal">₱0.00</span>
             </div>
-            <div class="invoice-totals-row">
-                <span class="invoice-totals-label">Shipment/Delivery Fee:</span>
-                <span class="invoice-totals-value" id="viewShipmentFee">₱0.00</span>
+            <div class="invoice-totals-row-compact">
+                <span class="invoice-totals-label-compact">Shipment:</span>
+                <span class="invoice-totals-value-compact" id="viewShipmentFee">₱0.00</span>
             </div>
-            <div class="invoice-totals-row invoice-totals-final">
-                <span class="invoice-totals-label">Total Amount:</span>
-                <span class="invoice-totals-value" id="viewTotalAmount">₱0.00</span>
+            <div class="invoice-totals-row-compact invoice-totals-final-compact">
+                <span class="invoice-totals-label-compact">Total:</span>
+                <span class="invoice-totals-value-compact" id="viewTotalAmount">₱0.00</span>
             </div>
         </div>
         
-        <div class="invoice-view-actions">
-            <button class="btn btn-secondary" onclick="downloadInvoice()">Download Invoice</button>
-            <button class="btn btn-primary" onclick="closeViewInvoiceModal()">Close</button>
+        <div class="invoice-status-badges" id="invoiceStatusBadges">
+            <span class="status-badge status-paid" id="paidBadge" style="display: none;">✓ Paid</span>
+            <span class="status-badge status-fulfilled" id="fulfilledBadge" style="display: none;">✓ Fulfilled</span>
+        </div>
+        
+        <div class="invoice-view-actions-compact">
+            <button class="btn btn-success btn-sm" id="markPaidBtn" onclick="markInvoicePaid()">Mark as Paid</button>
+            <button class="btn btn-info btn-sm" id="markFulfilledBtn" onclick="markInvoiceFulfilled()">Mark as Fulfilled</button>
+            <button class="btn btn-secondary btn-sm" onclick="downloadInvoice()">Download</button>
+            <button class="btn btn-primary btn-sm" onclick="closeViewInvoiceModal()">Close</button>
         </div>
     </div>
 </div>
@@ -361,6 +378,190 @@
     max-width: 800px;
     max-height: 90vh;
     overflow-y: auto;
+}
+
+/* Compact Invoice View Modal Styles */
+#viewInvoiceModal .modal-content {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    max-width: 600px;
+    width: 90%;
+    margin: 3% auto;
+    max-height: calc(100vh - 60px);
+    overflow-y: auto;
+    position: relative;
+}
+
+.invoice-view-header-compact {
+    text-align: center;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid #d8bfd8;
+}
+
+.invoice-view-header-compact h2 {
+    color: #9370db;
+    margin: 0 0 8px 0;
+    font-size: 24px;
+    font-weight: 700;
+    font-family: 'Merriweather', serif;
+}
+
+.invoice-customer-name-compact {
+    font-size: 20px;
+    color: #4b0082;
+    margin: 12px 0 8px 0;
+    font-weight: 700;
+    font-family: 'Merriweather', serif;
+}
+
+.invoice-number-compact {
+    font-size: 16px;
+    color: #9370db;
+    margin: 4px 0;
+    font-weight: 600;
+    font-family: 'Merriweather', serif;
+}
+
+.invoice-date-compact {
+    font-size: 14px;
+    color: #666;
+    margin: 4px 0 0 0;
+    font-family: 'Merriweather', serif;
+}
+
+.invoice-view-table-container-compact {
+    margin-bottom: 16px;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid #e6e6fa;
+}
+
+.invoice-view-table-compact {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    font-size: 13px;
+}
+
+.invoice-view-table-compact thead {
+    background: linear-gradient(135deg, #d8bfd8 0%, #dda0dd 100%);
+}
+
+.invoice-view-table-compact th {
+    color: #4b0082;
+    padding: 10px 8px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-family: 'Merriweather', serif;
+}
+
+.invoice-view-table-compact td {
+    padding: 10px 8px;
+    border-bottom: 1px solid #f0f0f0;
+    color: #333;
+    font-size: 13px;
+    text-align: center;
+    font-family: 'Merriweather', serif;
+}
+
+.invoice-view-table-compact tbody tr:nth-child(even) {
+    background-color: #faf9ff;
+}
+
+.invoice-view-totals-compact {
+    margin-top: 16px;
+    padding: 16px;
+    background: linear-gradient(135deg, #f5f0ff 0%, #f0e6ff 100%);
+    border-radius: 6px;
+    text-align: right;
+}
+
+.invoice-totals-row-compact {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 6px;
+    padding: 4px 0;
+    align-items: center;
+    font-family: 'Merriweather', serif;
+}
+
+.invoice-totals-label-compact {
+    width: 120px;
+    text-align: right;
+    padding-right: 12px;
+    font-weight: 500;
+    color: #4b0082;
+    font-size: 13px;
+}
+
+.invoice-totals-value-compact {
+    width: 100px;
+    text-align: right;
+    font-weight: 600;
+    color: #333;
+    font-size: 13px;
+}
+
+.invoice-totals-final-compact {
+    border-top: 2px solid #9370db;
+    padding-top: 10px;
+    margin-top: 10px;
+    font-size: 16px;
+}
+
+.invoice-totals-final-compact .invoice-totals-label-compact,
+.invoice-totals-final-compact .invoice-totals-value-compact {
+    color: #4b0082;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.invoice-status-badges {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin: 16px 0;
+}
+
+.status-badge {
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'Merriweather', serif;
+}
+
+.status-paid {
+    background: #10b981;
+    color: white;
+}
+
+.status-fulfilled {
+    background: #3b82f6;
+    color: white;
+}
+
+.invoice-view-actions-compact {
+    margin-top: 20px;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-top: 16px;
+    border-top: 1px solid #e6e6fa;
+}
+
+.invoice-view-actions-compact .btn {
+    font-size: 12px;
+    padding: 8px 16px;
+    font-family: 'Merriweather', serif;
 }
 
 .invoice-total {
@@ -563,7 +764,7 @@
 </style>
 <script>
 // Store product names from server
-const allProducts = {% if product_names %}{{ product_names|tojson }}{% else %}[]{% endif %}.filter(p => p && p.trim());
+const allProducts = ({% if product_names %}{{ product_names|tojson }}{% else %}[]{% endif %}).filter(p => p && p.trim());
 
 let invoiceItems = [];
 let selectedProductIndices = {}; // Track selected product index for each item
@@ -830,7 +1031,11 @@ function createInvoice(event) {
     });
 }
 
-function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmount, shipmentFee) {
+function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmount, shipmentFee, isPaid, isFulfilled) {
+    // Handle optional parameters with defaults
+    if (typeof isPaid === 'undefined') isPaid = false;
+    if (typeof isFulfilled === 'undefined') isFulfilled = false;
+    
     let itemsList = [];
     try {
         // Handle different input types safely
@@ -883,7 +1088,7 @@ function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmoun
     // Populate modal
     document.getElementById('viewInvoiceNumber').textContent = invoiceNumber;
     document.getElementById('viewCustomerNameTop').textContent = customerName;
-    document.getElementById('viewInvoiceDate').textContent = invoiceDate;
+    document.getElementById('viewInvoiceDate').textContent = 'Date: ' + invoiceDate;
     
     // Populate items table
     const itemsTableBody = document.getElementById('viewInvoiceItemsBody');
@@ -915,7 +1120,40 @@ function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmoun
     document.getElementById('viewShipmentFee').textContent = `₱${parseFloat(shipmentFee).toFixed(2)}`;
     document.getElementById('viewTotalAmount').textContent = `₱${parseFloat(totalAmount).toFixed(2)}`;
     
-    // Store data for download
+    // Handle paid/fulfilled status
+    isPaid = isPaid === true || isPaid === 'true' || isPaid === 'True';
+    isFulfilled = isFulfilled === true || isFulfilled === 'true' || isFulfilled === 'True';
+    
+    const paidBadge = document.getElementById('paidBadge');
+    const fulfilledBadge = document.getElementById('fulfilledBadge');
+    const markPaidBtn = document.getElementById('markPaidBtn');
+    const markFulfilledBtn = document.getElementById('markFulfilledBtn');
+    
+    if (isPaid) {
+        paidBadge.style.display = 'inline-block';
+        markPaidBtn.textContent = 'Mark as Unpaid';
+        markPaidBtn.classList.remove('btn-success');
+        markPaidBtn.classList.add('btn-warning');
+    } else {
+        paidBadge.style.display = 'none';
+        markPaidBtn.textContent = 'Mark as Paid';
+        markPaidBtn.classList.remove('btn-warning');
+        markPaidBtn.classList.add('btn-success');
+    }
+    
+    if (isFulfilled) {
+        fulfilledBadge.style.display = 'inline-block';
+        markFulfilledBtn.textContent = 'Mark as Unfulfilled';
+        markFulfilledBtn.classList.remove('btn-info');
+        markFulfilledBtn.classList.add('btn-warning');
+    } else {
+        fulfilledBadge.style.display = 'none';
+        markFulfilledBtn.textContent = 'Mark as Fulfilled';
+        markFulfilledBtn.classList.remove('btn-warning');
+        markFulfilledBtn.classList.add('btn-info');
+    }
+    
+    // Store data for download and status updates
     window.currentInvoiceData = {
         invoiceNumber,
         customerName,
@@ -923,7 +1161,9 @@ function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmoun
         items: itemsList,
         subtotal,
         shipmentFee,
-        totalAmount
+        totalAmount,
+        isPaid,
+        isFulfilled
     };
     
     // Show modal
@@ -939,6 +1179,92 @@ function escapeHtml(text) {
 
 function closeViewInvoiceModal() {
     document.getElementById('viewInvoiceModal').style.display = 'none';
+}
+
+function markInvoicePaid() {
+    if (!window.currentInvoiceData) return;
+    
+    const invoiceNumber = window.currentInvoiceData.invoiceNumber;
+    const currentStatus = window.currentInvoiceData.isPaid;
+    const newStatus = !currentStatus;
+    
+    fetch('/api/update_invoice_status', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            invoice_number: invoiceNumber,
+            status_type: 'paid',
+            status_value: newStatus
+        })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            window.currentInvoiceData.isPaid = newStatus;
+            const paidBadge = document.getElementById('paidBadge');
+            const markPaidBtn = document.getElementById('markPaidBtn');
+            
+            if (newStatus) {
+                paidBadge.style.display = 'inline-block';
+                markPaidBtn.textContent = 'Mark as Unpaid';
+                markPaidBtn.classList.remove('btn-success');
+                markPaidBtn.classList.add('btn-warning');
+            } else {
+                paidBadge.style.display = 'none';
+                markPaidBtn.textContent = 'Mark as Paid';
+                markPaidBtn.classList.remove('btn-warning');
+                markPaidBtn.classList.add('btn-success');
+            }
+        } else {
+            alert('Error: ' + result.message);
+        }
+    })
+    .catch(error => {
+        alert('Error: ' + error);
+    });
+}
+
+function markInvoiceFulfilled() {
+    if (!window.currentInvoiceData) return;
+    
+    const invoiceNumber = window.currentInvoiceData.invoiceNumber;
+    const currentStatus = window.currentInvoiceData.isFulfilled;
+    const newStatus = !currentStatus;
+    
+    fetch('/api/update_invoice_status', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            invoice_number: invoiceNumber,
+            status_type: 'fulfilled',
+            status_value: newStatus
+        })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            window.currentInvoiceData.isFulfilled = newStatus;
+            const fulfilledBadge = document.getElementById('fulfilledBadge');
+            const markFulfilledBtn = document.getElementById('markFulfilledBtn');
+            
+            if (newStatus) {
+                fulfilledBadge.style.display = 'inline-block';
+                markFulfilledBtn.textContent = 'Mark as Unfulfilled';
+                markFulfilledBtn.classList.remove('btn-info');
+                markFulfilledBtn.classList.add('btn-warning');
+            } else {
+                fulfilledBadge.style.display = 'none';
+                markFulfilledBtn.textContent = 'Mark as Fulfilled';
+                markFulfilledBtn.classList.remove('btn-warning');
+                markFulfilledBtn.classList.add('btn-info');
+            }
+        } else {
+            alert('Error: ' + result.message);
+        }
+    })
+    .catch(error => {
+        alert('Error: ' + error);
+    });
 }
 
 // Close modal when clicking outside
@@ -1163,6 +1489,30 @@ document.addEventListener('DOMContentLoaded', function() {
             initializeAutocomplete(initialItem);
         }
     }
+    
+    // Add event listeners for view invoice buttons
+    document.querySelectorAll('.view-invoice-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const invoiceNumber = this.getAttribute('data-invoice-number');
+            const itemsJson = this.getAttribute('data-items');
+            const customerName = this.getAttribute('data-customer-name');
+            const invoiceDate = this.getAttribute('data-invoice-date');
+            const totalAmount = parseFloat(this.getAttribute('data-total-amount') || 0);
+            const shipmentFee = parseFloat(this.getAttribute('data-shipment-fee') || 0);
+            const isPaid = this.getAttribute('data-paid') === 'true';
+            const isFulfilled = this.getAttribute('data-fulfilled') === 'true';
+            
+            let items = [];
+            try {
+                items = JSON.parse(itemsJson || '[]');
+            } catch(e) {
+                console.error('Error parsing items:', e);
+                items = [];
+            }
+            
+            viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmount, shipmentFee, isPaid, isFulfilled);
+        });
+    });
 });
 
 window.onclick = function(event) {
