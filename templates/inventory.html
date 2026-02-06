@@ -14,6 +14,7 @@
             <thead>
                 <tr>
                     <th>Product Name</th>
+                    <th>Actions</th>
                     <th>Total Price</th>
                     <th>Shipping Admin Fee</th>
                     <th>Total Cost/Unit</th>
@@ -23,47 +24,46 @@
                     <th>Supplier</th>
                     <th>Status</th>
                     <th>Date Added</th>
-                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {% if items %}
                     {% for item in items %}
                     <tr>
-                        <td title="{{ item.get('product_name', 'N/A') }}">{{ item.get('product_name', 'N/A') }}</td>
-                        <td>₱{{ "%.2f"|format(item.get('total_price', 0)) }}</td>
-                        <td>₱{{ "%.2f"|format(item.get('shipping_admin_fee', 0)) }}</td>
-                        <td>₱{{ "%.2f"|format(item.get('total_cost_per_unit', 0)) }}</td>
-                        <td>{{ item.get('quantity', 0) }}</td>
-                        <td>{{ item.get('total_bought_quantity', item.get('quantity', 0)) }}</td>
+                        <td title="{{ item.get('product_name', 'N/A') }}" style="font-size: 0.7rem;">{{ item.get('product_name', 'N/A') }}</td>
                         <td>
+                            <button class="btn btn-sm btn-secondary" onclick="openStatusModal({{ item.get('original_index', loop.index0) }}, '{{ item.get('product_name', '')|e }}', {{ item.get('remaining_qty', item.get('quantity', 0)) }})" style="font-size: 0.65rem; padding: 0.3rem 0.6rem;">
+                                Update
+                            </button>
+                        </td>
+                        <td style="font-size: 0.7rem;">₱{{ "%.2f"|format(item.get('total_price', 0)) }}</td>
+                        <td style="font-size: 0.7rem;">₱{{ "%.2f"|format(item.get('shipping_admin_fee', 0)) }}</td>
+                        <td style="font-size: 0.7rem;">₱{{ "%.2f"|format(item.get('total_cost_per_unit', 0)) }}</td>
+                        <td style="font-size: 0.7rem;">{{ item.get('quantity', 0) }}</td>
+                        <td style="font-size: 0.7rem;">{{ item.get('total_bought_quantity', item.get('quantity', 0)) }}</td>
+                        <td style="font-size: 0.7rem;">
                             {% set remaining = item.get('remaining_qty', item.get('quantity', 0)) %}
                             {% set total_bought = item.get('total_bought_quantity', item.get('quantity', 1)) %}
                             {% set percentage = (remaining / total_bought * 100) if total_bought > 0 else 0 %}
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <div style="flex: 1; background-color: #e5e7eb; border-radius: 0.25rem; height: 20px; position: relative; overflow: hidden; min-width: 60px;">
+                            <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                <div style="flex: 1; background-color: #e5e7eb; border-radius: 0.25rem; height: 18px; position: relative; overflow: hidden; min-width: 50px;">
                                     <div style="background-color: {% if percentage > 50 %}#10b981{% elif percentage > 25 %}#f59e0b{% else %}#ef4444{% endif %}; height: 100%; width: {{ percentage }}%; transition: width 0.3s;"></div>
                                 </div>
-                                <span style="min-width: 30px; text-align: right; font-weight: 600; font-size: 0.8125rem;">{{ remaining }}</span>
+                                <span style="min-width: 25px; text-align: right; font-weight: 600; font-size: 0.7rem;">{{ remaining }}</span>
                             </div>
                         </td>
-                        <td style="font-size: 0.75rem;">{{ item.get('supplier', '-') }}</td>
-                        <td style="font-size: 0.75rem;">
+                        <td style="font-size: 0.7rem;">{{ item.get('supplier', '-') }}</td>
+                        <td style="font-size: 0.7rem;">
                             {% set remaining = item.get('remaining_qty', item.get('quantity', 0)) %}
                             {% set is_in_stock = remaining > 0 %}
-                            <span style="padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-weight: 600; 
+                            <span style="padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-weight: 600; font-size: 0.65rem;
                                 {% if is_in_stock %}background-color: #10b981; color: white;
                                 {% else %}background-color: #ef4444; color: white;
                                 {% endif %}">
                                 {% if is_in_stock %}In Stock{% else %}Out of Stock{% endif %}
                             </span>
                         </td>
-                        <td style="font-size: 0.75rem;">{{ item.get('date_added', '-') }}</td>
-                        <td>
-                            <button class="btn btn-sm btn-secondary" onclick="openStatusModal({{ item.get('original_index', loop.index0) }}, '{{ item.get('product_name', '')|e }}', {{ item.get('remaining_qty', item.get('quantity', 0)) }})" style="font-size: 0.75rem; padding: 0.4rem 0.8rem;">
-                                Update Inventory
-                            </button>
-                        </td>
+                        <td style="font-size: 0.7rem;">{{ item.get('date_added', '-') }}</td>
                     </tr>
                     {% endfor %}
                 {% else %}
