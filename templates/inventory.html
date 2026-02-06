@@ -50,7 +50,9 @@
                         </td>
                         <td style="font-size: 0.75rem;">{{ item.get('supplier', '-') }}</td>
                         <td style="font-size: 0.75rem;">
-                            {% set status = item.get('status', 'in_stock') %}
+                            {% set status_raw = item.get('status', 'in_stock') %}
+                            {% set status = (status_raw|string) if status_raw else 'in_stock' %}
+                            {% set status_str = status.replace('_', ' ').title() if status and status != 'None' and status != 'nan' else 'In Stock' %}
                             <span style="padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-weight: 600; 
                                 {% if status == 'sold' %}background-color: #10b981; color: white;
                                 {% elif status == 'used' %}background-color: #f59e0b; color: white;
@@ -58,7 +60,7 @@
                                 {% elif status == 'raffled' %}background-color: #6366f1; color: white;
                                 {% else %}background-color: #e5e7eb; color: #374151;
                                 {% endif %}">
-                                {{ status.replace('_', ' ').title() }}
+                                {{ status_str }}
                             </span>
                         </td>
                         <td style="font-size: 0.75rem;">{{ item.get('date_added', '-') }}</td>

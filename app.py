@@ -130,7 +130,17 @@ def inventory():
                                 'tithe', 'profit_after_tithe', 'date_sold']
                 for col in required_cols:
                     if col not in df.columns:
-                        df[col] = None if col in ['remarks', 'status', 'supplier', 'date_sold'] else 0
+                        if col == 'status':
+                            df[col] = 'in_stock'  # Default status as string
+                        elif col in ['remarks', 'supplier', 'date_sold']:
+                            df[col] = None
+                        else:
+                            df[col] = 0
+                
+                # Ensure status column is string type (handle NaN, float, None)
+                if 'status' in df.columns:
+                    df['status'] = df['status'].astype(str).replace(['nan', 'None', 'NaN'], 'in_stock')
+                    df['status'] = df['status'].fillna('in_stock')
                 
                 inventory_items = df.to_dict('records')
                 
