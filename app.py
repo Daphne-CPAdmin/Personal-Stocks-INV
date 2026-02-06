@@ -107,6 +107,9 @@ def inventory():
                     else:
                         df['total_bought_quantity'] = 0
                 
+                # Store original index before sorting
+                df['original_index'] = df.index
+                
                 # Sort by product_name alphabetically, then by date_added (newest first for same product)
                 if 'product_name' in df.columns:
                     # Convert date_added to datetime for proper sorting
@@ -137,10 +140,11 @@ def inventory():
                         else:
                             df[col] = 0
                 
-                # Ensure status column is string type (handle NaN, float, None)
-                if 'status' in df.columns:
-                    df['status'] = df['status'].astype(str).replace(['nan', 'None', 'NaN'], 'in_stock')
-                    df['status'] = df['status'].fillna('in_stock')
+                # Calculate status based on remaining_qty (in_stock or out_of_stock)
+                if 'remaining_qty' in df.columns:
+                    df['status'] = df['remaining_qty'].apply(lambda x: 'in_stock' if (pd.notna(x) and float(x) > 0) else 'out_of_stock')
+                else:
+                    df['status'] = 'out_of_stock'
                 
                 inventory_items = df.to_dict('records')
                 
@@ -378,9 +382,25 @@ def update_status():
         if INVENTORY_SHEET_URL:
             df = connector.read_from_sheets(INVENTORY_SHEET_URL)
             
-            # Validate product_id is within bounds
-            if df.empty or product_id < 0 or product_id >= len(df):
-                return jsonify({'success': False, 'message': 'Product not found. Please refresh the page and try again.'}), 400
+            # Validate product_id is within bounds (product_id is the original DataFrame index)
+            if df.empty:
+                return jsonify({'success': False, 'message': 'Inventory is empty. Please refresh the page and try again.'}), 400
+            
+            # Find the row by original_index column (stored before sorting)
+            if 'original_index' in df.columns:
+                matching_rows = df[df['original_index'] == product_id]
+                if matching_rows.empty:
+                    return jsonify({'success': False, 'message': 'Product not found. Please refresh the page and try again.'}), 400
+                # Get the actual DataFrame index of the matching row
+                actual_index = matching_rows.index[0]
+            else:
+                # Fallback: use product_id as direct index (for backward compatibility)
+                if product_id < 0 or product_id >= len(df):
+                    return jsonify({'success': False, 'message': 'Product not found. Please refresh the page and try again.'}), 400
+                actual_index = product_id
+            
+            # Use actual_index for all DataFrame operations
+            product_id = actual_index
             
             # Helper functions to safely convert values from Google Sheets
             def safe_int(value, default=0):
@@ -453,8 +473,11 @@ def update_status():
             # Store history as JSON string
             df.at[product_id, 'status_history'] = json.dumps(history_list)
             
-            # Update current status
-            df.at[product_id, 'status'] = new_status
+            # Update current status - don't store action status, calculate from remaining_qty
+            # Status will be calculated as "in_stock" or "out_of_stock" based on remaining_qty
+            # We still track the action (sold/used/freebie/raffled) in status_history
+            # But the status column should reflect stock availability
+            # Don't update status column here - it will be calculated based on remaining_qty
             df.at[product_id, 'remarks'] = remarks
             
             if new_status == 'sold' and selling_price:

@@ -49,22 +49,18 @@
                         </td>
                         <td style="font-size: 0.75rem;">{{ item.get('supplier', '-') }}</td>
                         <td style="font-size: 0.75rem;">
-                            {% set status_raw = item.get('status', 'in_stock') %}
-                            {% set status = (status_raw|string) if status_raw else 'in_stock' %}
-                            {% set status_str = status.replace('_', ' ').title() if status and status != 'None' and status != 'nan' else 'In Stock' %}
+                            {% set remaining = item.get('remaining_qty', item.get('quantity', 0)) %}
+                            {% set is_in_stock = remaining > 0 %}
                             <span style="padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-weight: 600; 
-                                {% if status == 'sold' %}background-color: #10b981; color: white;
-                                {% elif status == 'used' %}background-color: #f59e0b; color: white;
-                                {% elif status == 'freebie' %}background-color: #8b5cf6; color: white;
-                                {% elif status == 'raffled' %}background-color: #6366f1; color: white;
-                                {% else %}background-color: #e5e7eb; color: #374151;
+                                {% if is_in_stock %}background-color: #10b981; color: white;
+                                {% else %}background-color: #ef4444; color: white;
                                 {% endif %}">
-                                {{ status_str }}
+                                {% if is_in_stock %}In Stock{% else %}Out of Stock{% endif %}
                             </span>
                         </td>
                         <td style="font-size: 0.75rem;">{{ item.get('date_added', '-') }}</td>
                         <td>
-                            <button class="btn btn-sm btn-secondary" onclick="openStatusModal({{ loop.index0 }}, '{{ item.get('product_name', '')|e }}', '{{ item.get('status', 'in_stock')|e }}', {{ item.get('remaining_qty', item.get('quantity', 0)) }})" style="font-size: 0.75rem; padding: 0.4rem 0.8rem;">
+                            <button class="btn btn-sm btn-secondary" onclick="openStatusModal({{ item.get('original_index', loop.index0) }}, '{{ item.get('product_name', '')|e }}', {{ item.get('remaining_qty', item.get('quantity', 0)) }})" style="font-size: 0.75rem; padding: 0.4rem 0.8rem;">
                                 Update Inventory
                             </button>
                         </td>
@@ -183,13 +179,12 @@
         <form id="statusForm" onsubmit="updateStatus(event)">
             <input type="hidden" id="statusProductId" name="product_id">
             <div class="form-group">
-                <label>Status *</label>
+                <label>Action *</label>
                 <select id="statusSelect" name="status" required onchange="toggleFields()">
-                    <option value="in_stock">In Stock</option>
-                    <option value="used">Used</option>
-                    <option value="freebie">Freebie</option>
-                    <option value="raffled">Raffled</option>
                     <option value="sold">Sold</option>
+                    <option value="used">Used</option>
+                    <option value="freebie">Freebie/Given</option>
+                    <option value="raffled">Raffled</option>
                 </select>
             </div>
             <div class="form-group" id="quantityUsedGroup" style="display: none;">
@@ -410,11 +405,11 @@ function closeAddProductModal() {
     selectedProductIndex = -1;
 }
 
-function openStatusModal(index, productName, currentStatus, remainingQty) {
+function openStatusModal(index, productName, remainingQty) {
     document.getElementById('statusProductId').value = index;
     document.getElementById('statusProductName').textContent = productName;
     document.getElementById('statusRemainingQty').textContent = remainingQty;
-    document.getElementById('statusSelect').value = currentStatus;
+    document.getElementById('statusSelect').value = 'sold'; // Default to sold
     document.getElementById('quantityUsed').max = remainingQty;
     document.getElementById('quantityUsed').value = Math.min(1, remainingQty);
     document.getElementById('statusModal').style.display = 'block';
