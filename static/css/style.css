@@ -5,33 +5,88 @@
 }
 
 :root {
-    --primary-color: #6366f1;
-    --primary-dark: #4f46e5;
-    --secondary-color: #8b5cf6;
+    --primary-color: #7c3aed;
+    --primary-dark: #5b21b6;
+    --secondary-color: #a78bfa;
+    --lavender-light: #e9d5ff;
+    --lavender-medium: #c4b5fd;
+    --purple-deep: #4c1d95;
+    --purple-dark: #581c87;
     --success-color: #10b981;
     --danger-color: #ef4444;
     --warning-color: #f59e0b;
-    --bg-color: #f9fafb;
+    --bg-color: #faf5ff;
     --card-bg: #ffffff;
-    --text-primary: #111827;
+    --text-primary: #1e1b4b;
     --text-secondary: #6b7280;
-    --border-color: #e5e7eb;
-    --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --border-color: #e9d5ff;
+    --shadow: 0 1px 3px 0 rgba(124, 58, 237, 0.1), 0 1px 2px 0 rgba(124, 58, 237, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(124, 58, 237, 0.1), 0 4px 6px -2px rgba(124, 58, 237, 0.05);
 }
 
 body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background-color: var(--bg-color);
+    font-family: 'Merriweather', Georgia, serif;
+    background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 50%, #ede9fe 100%);
+    background-attachment: fixed;
     color: var(--text-primary);
-    line-height: 1.6;
+    line-height: 1.7;
+    position: relative;
+}
+
+/* Butterflies theme background pattern */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: 
+        radial-gradient(circle at 20% 30%, rgba(196, 181, 253, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, rgba(233, 213, 255, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 50% 50%, rgba(167, 139, 250, 0.05) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.main-content {
+    position: relative;
+    z-index: 1;
 }
 
 .navbar {
-    background: linear-gradient(135deg, #6b46c1 0%, #9333ea 50%, #a855f7 100%);
+    background: linear-gradient(135deg, #4c1d95 0%, #5b21b6 25%, #7c3aed 50%, #a78bfa 75%, #c4b5fd 100%);
     color: white;
-    padding: 1rem 0;
-    box-shadow: var(--shadow-lg);
+    padding: 1.25rem 0;
+    box-shadow: 0 4px 20px rgba(76, 29, 149, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Butterflies decorative elements */
+.navbar::before {
+    content: '🦋';
+    position: absolute;
+    font-size: 1.5rem;
+    opacity: 0.15;
+    animation: float 6s ease-in-out infinite;
+    top: 20%;
+    left: 10%;
+}
+
+.navbar::after {
+    content: '🦋';
+    position: absolute;
+    font-size: 1.2rem;
+    opacity: 0.1;
+    animation: float 8s ease-in-out infinite reverse;
+    top: 60%;
+    right: 15%;
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0px) rotate(0deg); }
+    50% { transform: translateY(-10px) rotate(5deg); }
 }
 
 .nav-container {
@@ -44,11 +99,13 @@ body {
 }
 
 .nav-brand h1 {
-    font-size: 1.5rem;
-    font-weight: 700;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    letter-spacing: -0.5px;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    font-size: 1.75rem;
+    font-weight: 900;
+    font-family: 'Merriweather', Georgia, serif;
+    letter-spacing: 0.5px;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), 0 0 20px rgba(255, 255, 255, 0.1);
+    position: relative;
+    z-index: 1;
 }
 
 .nav-menu {
@@ -58,20 +115,22 @@ body {
 }
 
 .nav-link {
-    color: #e9d5ff;
+    color: #f3e8ff;
     text-decoration: none;
-    font-weight: 600;
-    font-size: 0.9375rem;
-    padding: 0.75rem 1.25rem;
-    border-radius: 0.625rem;
-    transition: all 0.3s ease;
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    letter-spacing: 0.3px;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-weight: 700;
+    font-size: 1rem;
+    padding: 0.875rem 1.5rem;
+    border-radius: 1rem;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(233, 213, 255, 0.1) 100%);
+    backdrop-filter: blur(12px);
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    letter-spacing: 0.5px;
+    font-family: 'Merriweather', Georgia, serif;
     position: relative;
     overflow: hidden;
+    text-transform: capitalize;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .nav-link::before {
@@ -81,8 +140,8 @@ body {
     left: -100%;
     width: 100%;
     height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-    transition: left 0.5s;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    transition: left 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .nav-link:hover::before {
@@ -90,23 +149,24 @@ body {
 }
 
 .nav-link:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, rgba(233, 213, 255, 0.2) 100%);
     color: white;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-3px) scale(1.05);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25), 0 0 30px rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.4);
 }
 
 .nav-link:active {
-    transform: translateY(0);
+    transform: translateY(-1px) scale(1.02);
 }
 
 .nav-link.active {
-    background: rgba(255, 255, 255, 0.25);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.35) 0%, rgba(196, 181, 253, 0.25) 100%);
     color: white;
-    border-color: rgba(255, 255, 255, 0.4);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    font-weight: 700;
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    font-weight: 900;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .main-content {
@@ -123,24 +183,42 @@ body {
 }
 
 .page-header h2 {
-    font-size: 2rem;
-    font-weight: 700;
-    color: var(--text-primary);
+    font-size: 2.25rem;
+    font-weight: 900;
+    font-family: 'Merriweather', Georgia, serif;
+    color: var(--purple-deep);
+    text-shadow: 0 2px 4px rgba(76, 29, 149, 0.1);
+    letter-spacing: 0.5px;
 }
 
 .card {
     background: var(--card-bg);
-    border-radius: 0.75rem;
+    border-radius: 1rem;
     padding: 2rem;
-    box-shadow: var(--shadow);
+    box-shadow: 0 4px 16px rgba(124, 58, 237, 0.1), 0 2px 8px rgba(196, 181, 253, 0.1);
     margin-bottom: 2rem;
+    border: 1px solid var(--border-color);
+    position: relative;
+    overflow: hidden;
+}
+
+.card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #4c1d95 0%, #7c3aed 50%, #c4b5fd 100%);
 }
 
 .card h3 {
     margin-bottom: 1.5rem;
-    color: var(--text-primary);
-    font-size: 1.25rem;
-    font-weight: 600;
+    color: var(--purple-deep);
+    font-size: 1.5rem;
+    font-weight: 700;
+    font-family: 'Merriweather', Georgia, serif;
+    letter-spacing: 0.3px;
 }
 
 .btn {
@@ -156,23 +234,31 @@ body {
 }
 
 .btn-primary {
-    background-color: var(--primary-color);
+    background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
     color: white;
+    font-family: 'Merriweather', Georgia, serif;
+    font-weight: 700;
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
 }
 
 .btn-primary:hover {
-    background-color: var(--primary-dark);
-    transform: translateY(-1px);
-    box-shadow: var(--shadow);
+    background: linear-gradient(135deg, #5b21b6 0%, #4c1d95 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(124, 58, 237, 0.4);
 }
 
 .btn-secondary {
-    background-color: var(--text-secondary);
+    background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%);
     color: white;
+    font-family: 'Merriweather', Georgia, serif;
+    font-weight: 700;
+    box-shadow: 0 4px 12px rgba(167, 139, 250, 0.3);
 }
 
 .btn-secondary:hover {
-    background-color: #4b5563;
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(167, 139, 250, 0.4);
 }
 
 .btn-sm {
@@ -206,16 +292,19 @@ body {
 .data-table th {
     padding: 1rem;
     text-align: left;
-    font-weight: 600;
-    color: var(--text-primary);
-    border-bottom: 2px solid var(--border-color);
+    font-weight: 700;
+    font-family: 'Merriweather', Georgia, serif;
+    color: var(--purple-deep);
+    border-bottom: 2px solid var(--lavender-medium);
+    background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
 }
 
 .data-table td {
     padding: 0.75rem 0.5rem;
     border-bottom: 1px solid var(--border-color);
-    color: var(--text-secondary);
-    font-size: 0.8125rem;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-family: 'Merriweather', Georgia, serif;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -323,8 +412,9 @@ body {
 .form-group label {
     display: block;
     margin-bottom: 0.5rem;
-    font-weight: 500;
-    color: var(--text-primary);
+    font-weight: 700;
+    font-family: 'Merriweather', Georgia, serif;
+    color: var(--purple-deep);
 }
 
 .form-group input,
@@ -332,11 +422,20 @@ body {
 .form-group textarea {
     width: 100%;
     padding: 0.75rem;
-    border: 1px solid var(--border-color);
-    border-radius: 0.5rem;
+    border: 2px solid var(--border-color);
+    border-radius: 0.75rem;
     font-size: 0.875rem;
-    font-family: inherit;
-    transition: border-color 0.2s;
+    font-family: 'Merriweather', Georgia, serif;
+    transition: all 0.3s ease;
+    background: #faf5ff;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    background: white;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.1);
 }
 
 .form-group input:focus,
