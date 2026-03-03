@@ -5,6 +5,7 @@ from datetime import datetime
 import logging
 import pandas as pd
 from data_sources import DataConnector
+import uuid
 
 # Load environment variables
 load_dotenv()
@@ -65,6 +66,56 @@ def format_date_custom(date_str):
 
 # Initialize DataConnector
 connector = DataConnector({})
+
+def _generate_invoice_number(existing_df):
+    """Generate unique invoice number in INV-YYYYMMDD-XXX format."""
+    date_prefix = datetime.now().strftime('%Y%m%d')
+    base_prefix = f"INV-{date_prefix}-"
+    next_seq = 1
+
+    try:
+        if existing_df is not None and not existing_df.empty and 'invoice_number' in existing_df.columns:
+            for value in existing_df['invoice_number'].dropna().astype(str):
+                value = value.strip()
+                if value.startswith(base_prefix):
+                    suffix = value.replace(base_prefix, '', 1)
+                    if suffix.isdigit():
+                        next_seq = max(next_seq, int(suffix) + 1)
+    except Exception as e:
+        logger.warning(f"Could not inspect existing invoice numbers: {str(e)}")
+
+    return f"{base_prefix}{next_seq:03d}"
+
+def _build_invoice_mask(df, invoice_number=None, invoice_id=None, created_at=None):
+    """Build a safe mask for targeting a single logical invoice instance."""
+    if df is None or df.empty:
+        return pd.Series(dtype=bool)
+
+    if invoice_id and 'invoice_id' in df.columns:
+        id_mask = df['invoice_id'].astype(str).str.strip() == str(invoice_id).strip()
+        if id_mask.any():
+            return id_mask
+
+    if invoice_number:
+        number_mask = df['invoice_number'].astype(str).str.strip() == str(invoice_number).strip()
+        if created_at and 'created_at' in df.columns:
+            created_mask = df['created_at'].astype(str).str.strip() == str(created_at).strip()
+            combined = number_mask & created_mask
+            return combined
+        return number_mask
+
+    return pd.Series([False] * len(df), index=df.index)
+
+def _count_invoice_instances(df_subset):
+    """Estimate how many distinct invoice instances exist in a subset."""
+    if df_subset is None or df_subset.empty:
+        return 0
+    cols = ['invoice_id', 'created_at', 'customer_name', 'invoice_date', 'total_amount']
+    available = [c for c in cols if c in df_subset.columns]
+    if not available:
+        return 0
+    sig = df_subset[available].fillna('').astype(str).agg('|'.join, axis=1)
+    return sig.nunique()
 
 # Google Sheets URLs from environment
 INVENTORY_SHEET_URL = os.getenv('INVENTORY_SHEET_URL')
@@ -711,11 +762,15 @@ def invoices():
             if df.empty:
                 invoices = []
             else:
-                # Group by invoice_number to reconstruct invoice structure
+                # Group by invoice_id when available; fallback to invoice_number + created_at.
                 invoices_dict = {}
-                for _, row in df.iterrows():
-                    invoice_num = row.get('invoice_number', '')
-                    if invoice_num not in invoices_dict:
+                for row_idx, row in df.iterrows():
+                    invoice_num = str(row.get('invoice_number', '')).strip()
+                    invoice_id = str(row.get('invoice_id', '')).strip()
+                    created_at = str(row.get('created_at', '')).strip()
+                    group_key = invoice_id if invoice_id else f"{invoice_num}__{created_at if created_at else row_idx}"
+
+                    if group_key not in invoices_dict:
                         # Handle boolean conversion for paid/fulfilled (may come as string from sheets)
                         paid_val = row.get('paid', False)
                         if isinstance(paid_val, str):
@@ -724,7 +779,8 @@ def invoices():
                         if isinstance(fulfilled_val, str):
                             fulfilled_val = fulfilled_val.lower() in ['true', '1', 'yes']
                         
-                        invoices_dict[invoice_num] = {
+                        invoices_dict[group_key] = {
+                            'invoice_id': invoice_id,
                             'invoice_number': invoice_num,
                             'customer_name': row.get('customer_name', ''),
                             'products_summary': row.get('products_summary', ''),
@@ -750,7 +806,7 @@ def invoices():
                             qty_val = int(quantity) if quantity else 0
                             subtotal_val = float(line_total) if line_total else (price_val * qty_val)
                             
-                            invoices_dict[invoice_num]['items_parsed'].append({
+                            invoices_dict[group_key]['items_parsed'].append({
                                 'name': product_name,
                                 'price': price_val,
                                 'quantity': qty_val,
@@ -759,7 +815,7 @@ def invoices():
                         except (ValueError, TypeError) as e:
                             logger.warning(f"Error parsing invoice item for {invoice_num}: {str(e)}")
                             # Still add the item with default values
-                            invoices_dict[invoice_num]['items_parsed'].append({
+                            invoices_dict[group_key]['items_parsed'].append({
                                 'name': product_name,
                                 'price': 0,
                                 'quantity': 0,
@@ -847,7 +903,8 @@ def create_invoice():
         total_amount = float(data.get('total_amount', 0))
         invoice_date = data.get('invoice_date', datetime.now().strftime('%Y-%m-%d'))
         
-        invoice_number = f"INV-{datetime.now().strftime('%Y%m%d')}-{len(items)}"
+        invoice_number = f"INV-{datetime.now().strftime('%Y%m%d')}-{datetime.now().strftime('%H%M%S')}"
+        invoice_id = str(uuid.uuid4())
         created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
         # Generate products summary string
@@ -864,6 +921,7 @@ def create_invoice():
         invoice_rows = []
         for item in items:
             invoice_row = {
+                'invoice_id': invoice_id,
                 'invoice_number': invoice_number,
                 'customer_name': customer_name,
                 'products_summary': products_summary,
@@ -883,6 +941,7 @@ def create_invoice():
         # If no items, create one row with empty product
         if not invoice_rows:
             invoice_row = {
+                'invoice_id': invoice_id,
                 'invoice_number': invoice_number,
                 'customer_name': customer_name,
                 'products_summary': 'No items',
@@ -901,9 +960,17 @@ def create_invoice():
         
         if INVOICES_SHEET_URL:
             df = connector.read_from_sheets(INVOICES_SHEET_URL)
+            invoice_number = _generate_invoice_number(df)
+            # Reflect generated invoice number into rows before concat.
+            for row in invoice_rows:
+                row['invoice_number'] = invoice_number
             # Handle empty DataFrame
             if df.empty:
-                df = pd.DataFrame(columns=['invoice_number', 'customer_name', 'products_summary', 'product_name', 'price_sold', 'quantity', 'line_total', 'shipment_fee', 'total_amount', 'invoice_date', 'created_at', 'paid', 'fulfilled'])
+                df = pd.DataFrame(columns=['invoice_id', 'invoice_number', 'customer_name', 'products_summary', 'product_name', 'price_sold', 'quantity', 'line_total', 'shipment_fee', 'total_amount', 'invoice_date', 'created_at', 'paid', 'fulfilled'])
+            else:
+                # Keep forward compatibility for old sheets without invoice_id column.
+                if 'invoice_id' not in df.columns:
+                    df['invoice_id'] = ''
             # Ensure paid and fulfilled columns exist
             if 'paid' not in df.columns:
                 df['paid'] = False
@@ -982,11 +1049,13 @@ def update_invoice_status():
     try:
         data = request.json
         invoice_number = data.get('invoice_number')
+        invoice_id = data.get('invoice_id')
+        created_at = data.get('created_at')
         status_type = data.get('status_type')  # 'paid' or 'fulfilled'
         status_value = data.get('status_value', True)  # True/False
         
-        if not invoice_number or not status_type:
-            return jsonify({'success': False, 'message': 'Invoice number and status type are required'}), 400
+        if (not invoice_number and not invoice_id) or not status_type:
+            return jsonify({'success': False, 'message': 'Invoice reference and status type are required'}), 400
         
         if status_type not in ['paid', 'fulfilled']:
             return jsonify({'success': False, 'message': 'Status type must be "paid" or "fulfilled"'}), 400
@@ -1000,10 +1069,19 @@ def update_invoice_status():
             if status_type not in df.columns:
                 df[status_type] = False
             
-            # Update all rows with this invoice number
-            mask = df['invoice_number'] == invoice_number
+            # Update all rows for the targeted invoice instance.
+            mask = _build_invoice_mask(df, invoice_number=invoice_number, invoice_id=invoice_id, created_at=created_at)
             if not mask.any():
                 return jsonify({'success': False, 'message': 'Invoice not found'}), 404
+
+            # Safety guard: prevent mass-updating multiple invoice instances.
+            if not invoice_id and not created_at:
+                candidate_rows = df[df['invoice_number'].astype(str).str.strip() == str(invoice_number).strip()]
+                if _count_invoice_instances(candidate_rows) > 1:
+                    return jsonify({
+                        'success': False,
+                        'message': 'This invoice number matches multiple invoices. Please refresh and retry from the latest list.'
+                    }), 409
             
             # Convert boolean properly
             if isinstance(status_value, str):
@@ -1024,13 +1102,15 @@ def update_invoice():
     try:
         data = request.json or {}
         invoice_number = data.get('invoice_number')
+        invoice_id = data.get('invoice_id')
+        created_at = data.get('created_at')
         customer_name = (data.get('customer_name') or '').strip()
         invoice_date = (data.get('invoice_date') or '').strip()
         shipment_fee = float(data.get('shipment_fee', 0) or 0)
         items = data.get('items', [])
 
-        if not invoice_number:
-            return jsonify({'success': False, 'message': 'Invoice number is required'}), 400
+        if not invoice_number and not invoice_id:
+            return jsonify({'success': False, 'message': 'Invoice reference is required'}), 400
         if not customer_name:
             return jsonify({'success': False, 'message': 'Customer name is required'}), 400
         if not invoice_date:
@@ -1065,13 +1145,23 @@ def update_invoice():
         if df.empty:
             return jsonify({'success': False, 'message': 'Invoice not found'}), 404
 
-        existing_mask = df['invoice_number'] == invoice_number
+        existing_mask = _build_invoice_mask(df, invoice_number=invoice_number, invoice_id=invoice_id, created_at=created_at)
         if not existing_mask.any():
             return jsonify({'success': False, 'message': 'Invoice not found'}), 404
+
+        # Safety guard: avoid replacing multiple distinct invoices when invoice_number collides.
+        if not invoice_id and not created_at:
+            candidate_rows = df[df['invoice_number'].astype(str).str.strip() == str(invoice_number).strip()]
+            if _count_invoice_instances(candidate_rows) > 1:
+                return jsonify({
+                    'success': False,
+                    'message': 'This invoice number matches multiple invoices. Please refresh and edit the exact invoice entry again.'
+                }), 409
 
         existing_rows = df[existing_mask]
         first_row = existing_rows.iloc[0]
         created_at = first_row.get('created_at', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        invoice_id = str(first_row.get('invoice_id', '')).strip() or str(invoice_id or '').strip() or str(uuid.uuid4())
         paid = first_row.get('paid', False)
         fulfilled = first_row.get('fulfilled', False)
 
@@ -1089,6 +1179,7 @@ def update_invoice():
         rebuilt_rows = []
         for item in normalized_items:
             rebuilt_rows.append({
+                'invoice_id': invoice_id,
                 'invoice_number': invoice_number,
                 'customer_name': customer_name,
                 'products_summary': products_summary,
@@ -1173,6 +1264,8 @@ def delete_invoice():
     try:
         data = request.json
         invoice_number = data.get('invoice_number')
+        invoice_id = data.get('invoice_id')
+        created_at = data.get('created_at')
         
         if not invoice_number:
             return jsonify({'success': False, 'message': 'Invoice number is required'}), 400
@@ -1182,9 +1275,22 @@ def delete_invoice():
             if df.empty:
                 return jsonify({'success': False, 'message': 'Invoice not found'}), 404
             
-            # Find and remove the invoice
+            # Find and remove only the targeted invoice instance.
             initial_count = len(df)
-            df = df[df['invoice_number'] != invoice_number]
+            delete_mask = _build_invoice_mask(df, invoice_number=invoice_number, invoice_id=invoice_id, created_at=created_at)
+            if not delete_mask.any():
+                return jsonify({'success': False, 'message': 'Invoice not found'}), 404
+
+            # Safety guard: avoid deleting multiple distinct invoices by shared number only.
+            if not invoice_id and not created_at:
+                candidate_rows = df[df['invoice_number'].astype(str).str.strip() == str(invoice_number).strip()]
+                if _count_invoice_instances(candidate_rows) > 1:
+                    return jsonify({
+                        'success': False,
+                        'message': 'This invoice number matches multiple invoices. Please refresh and delete the exact invoice entry again.'
+                    }), 409
+
+            df = df[~delete_mask]
             
             if len(df) == initial_count:
                 return jsonify({'success': False, 'message': 'Invoice not found'}), 404
