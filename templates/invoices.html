@@ -423,7 +423,7 @@
         </div>
         
         <div class="invoice-view-actions-compact">
-            <button class="btn btn-primary btn-sm" id="savePaymentBtn" onclick="addInvoicePayment()">Save Payment</button>
+            <button class="btn btn-primary btn-sm" id="savePaymentBtn" onclick="addInvoicePayment()" style="display:none;">Save Payment</button>
             <button class="btn btn-warning btn-sm" id="markPartialBtn" onclick="togglePartialPaymentInput()">Partially Paid</button>
             <button class="btn btn-success btn-sm" id="markPaidBtn" onclick="markInvoicePaid()">Mark as Paid</button>
             <button class="btn btn-info btn-sm" id="markFulfilledBtn" onclick="markInvoiceFulfilled()">Mark as Fulfilled</button>
@@ -1518,6 +1518,7 @@ function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmoun
     const markFulfilledBtn = document.getElementById('markFulfilledBtn');
     const markPartialBtn = document.getElementById('markPartialBtn');
     const partialPaymentPanel = document.getElementById('partialPaymentPanel');
+    const savePaymentBtn = document.getElementById('savePaymentBtn');
     
     if (isPaid) {
         paidBadge.style.display = 'inline-block';
@@ -1534,8 +1535,12 @@ function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmoun
     if (partialPaymentPanel) {
         partialPaymentPanel.style.display = 'none';
     }
+    if (savePaymentBtn) {
+        savePaymentBtn.style.display = 'none';
+    }
     if (markPartialBtn) {
         markPartialBtn.style.display = balanceDue > 0 ? 'inline-block' : 'none';
+        markPartialBtn.textContent = 'Partially Paid';
     }
     
     if (isFulfilled) {
@@ -1614,11 +1619,22 @@ function markInvoicePaid() {
                 markPaidBtn.textContent = 'Mark as Unpaid';
                 markPaidBtn.classList.remove('btn-success');
                 markPaidBtn.classList.add('btn-warning');
+                const markPartialBtn = document.getElementById('markPartialBtn');
+                const partialPaymentPanel = document.getElementById('partialPaymentPanel');
+                const savePaymentBtn = document.getElementById('savePaymentBtn');
+                if (markPartialBtn) markPartialBtn.style.display = 'none';
+                if (partialPaymentPanel) partialPaymentPanel.style.display = 'none';
+                if (savePaymentBtn) savePaymentBtn.style.display = 'none';
             } else {
                 paidBadge.style.display = 'none';
                 markPaidBtn.textContent = 'Mark as Paid';
                 markPaidBtn.classList.remove('btn-warning');
                 markPaidBtn.classList.add('btn-success');
+                const markPartialBtn = document.getElementById('markPartialBtn');
+                if (markPartialBtn) {
+                    markPartialBtn.style.display = 'inline-block';
+                    markPartialBtn.textContent = 'Partially Paid';
+                }
             }
         } else {
             alert('Error: ' + result.message);
@@ -1679,11 +1695,16 @@ function addInvoicePayment() {
         }
         const markPartialBtn = document.getElementById('markPartialBtn');
         const partialPaymentPanel = document.getElementById('partialPaymentPanel');
+        const savePaymentBtn = document.getElementById('savePaymentBtn');
         if (markPartialBtn) {
             markPartialBtn.style.display = updatedBalance > 0 ? 'inline-block' : 'none';
+            markPartialBtn.textContent = 'Partially Paid';
         }
         if (partialPaymentPanel && updatedBalance <= 0) {
             partialPaymentPanel.style.display = 'none';
+        }
+        if (savePaymentBtn) {
+            savePaymentBtn.style.display = 'none';
         }
         alert('Payment saved successfully.');
     })
@@ -1695,9 +1716,17 @@ function addInvoicePayment() {
 function togglePartialPaymentInput() {
     const panel = document.getElementById('partialPaymentPanel');
     const amountInput = document.getElementById('viewPaymentAmount');
+    const savePaymentBtn = document.getElementById('savePaymentBtn');
+    const markPartialBtn = document.getElementById('markPartialBtn');
     if (!panel) return;
     const shouldShow = panel.style.display === 'none' || panel.style.display === '';
     panel.style.display = shouldShow ? 'block' : 'none';
+    if (savePaymentBtn) {
+        savePaymentBtn.style.display = shouldShow ? 'inline-block' : 'none';
+    }
+    if (markPartialBtn) {
+        markPartialBtn.textContent = shouldShow ? 'Hide Partial' : 'Partially Paid';
+    }
     if (shouldShow && amountInput) {
         amountInput.focus();
     }
