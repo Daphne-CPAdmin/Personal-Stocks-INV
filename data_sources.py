@@ -122,17 +122,27 @@ class DataConnector:
             spreadsheet = self.client.open_by_key(spreadsheet_id)
             worksheet = spreadsheet.get_worksheet_by_id(int(gid))
             
-            # Clear existing content
-            worksheet.clear()
-            
-            # Write headers
-            headers = list(df.columns)
-            worksheet.append_row(headers)
-            
-            # Write data
+            if df is None or len(df.columns) == 0:
+                logger.error("Refusing to write DataFrame with no columns to avoid wiping sheet")
+                return False
+
+            # Build full payload first so we do one update call.
+            headers = [str(col) for col in list(df.columns)]
+            rows = []
             for _, row in df.iterrows():
-                values = [str(val) if pd.notna(val) else '' for val in row.values]
-                worksheet.append_row(values)
+                rows.append([str(val) if pd.notna(val) else '' for val in row.values])
+            values = [headers] + rows
+
+            # Safer write path:
+            # - no pre-clear (avoids blank sheet if write fails)
+            # - single update call
+            worksheet.update('A1', values)
+
+            # Resize after successful write to trim old trailing rows/columns.
+            target_rows = max(1, len(values))
+            target_cols = max(1, len(headers))
+            if worksheet.row_count != target_rows or worksheet.col_count != target_cols:
+                worksheet.resize(rows=target_rows, cols=target_cols)
             
             logger.info(f"Wrote {len(df)} rows to Google Sheets")
             return True

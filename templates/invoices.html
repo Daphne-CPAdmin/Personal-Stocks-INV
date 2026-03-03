@@ -7,6 +7,7 @@
     <h2>Invoice Management</h2>
     <button class="btn btn-primary" onclick="openCreateInvoiceModal()">+ Create Invoice</button>
 </div>
+<script id="allProductsJson" type="application/json">{% if product_names %}{{ product_names|tojson }}{% else %}[]{% endif %}</script>
 
 <div class="card">
     <h3>Recent Invoices</h3>
@@ -65,7 +66,6 @@
                                 <td rowspan="{{ items_list|length }}" style="vertical-align: middle; text-align: center; padding-top: 1rem;">
                                     <div style="display: flex; gap: 0.5rem; flex-direction: column; align-items: center;">
                                         <button class="btn btn-sm btn-primary view-invoice-btn" 
-                                                data-invoice-id="{{ invoice.get('invoice_id', '')|e }}"
                                                 data-invoice-number="{{ invoice.get('invoice_number', '')|e }}"
                                                 data-items='{{ invoice.get('items_parsed', [])|tojson }}'
                                                 data-customer-name="{{ invoice.get('customer_name', '')|e }}"
@@ -78,7 +78,6 @@
                                             View
                                         </button>
                                         <button class="btn btn-sm btn-secondary edit-invoice-btn"
-                                                data-invoice-id="{{ invoice.get('invoice_id', '')|e }}"
                                                 data-invoice-number="{{ invoice.get('invoice_number', '')|e }}"
                                                 data-items='{{ invoice.get('items_parsed', [])|tojson }}'
                                                 data-customer-name="{{ invoice.get('customer_name', '')|e }}"
@@ -87,7 +86,9 @@
                                                 data-shipment-fee="{{ shipment_fee }}">
                                             Edit
                                         </button>
-                                        <button class="btn btn-sm btn-danger" onclick="deleteInvoice('{{ invoice.get('invoice_number', '')|e }}', '{{ invoice.get('created_at', '')|e }}', '{{ invoice.get('invoice_id', '')|e }}')">
+                                        <button class="btn btn-sm btn-danger delete-invoice-btn"
+                                                data-invoice-number="{{ invoice.get('invoice_number', '')|e }}"
+                                                data-created-at="{{ invoice.get('created_at', '')|e }}">
                                             Delete
                                         </button>
                                     </div>
@@ -106,7 +107,6 @@
                                 <td style="text-align: center;">
                                     <div style="display: flex; gap: 0.5rem; flex-direction: column; align-items: center;">
                                         <button class="btn btn-sm btn-primary view-invoice-btn" 
-                                                data-invoice-id="{{ invoice.get('invoice_id', '')|e }}"
                                                 data-invoice-number="{{ invoice.get('invoice_number', '')|e }}"
                                                 data-items='{{ invoice.get('items_parsed', [])|tojson }}'
                                                 data-customer-name="{{ invoice.get('customer_name', '')|e }}"
@@ -119,7 +119,6 @@
                                             View
                                         </button>
                                         <button class="btn btn-sm btn-secondary edit-invoice-btn"
-                                                data-invoice-id="{{ invoice.get('invoice_id', '')|e }}"
                                                 data-invoice-number="{{ invoice.get('invoice_number', '')|e }}"
                                                 data-items='{{ invoice.get('items_parsed', [])|tojson }}'
                                                 data-customer-name="{{ invoice.get('customer_name', '')|e }}"
@@ -128,7 +127,9 @@
                                                 data-shipment-fee="{{ shipment_fee }}">
                                             Edit
                                         </button>
-                                        <button class="btn btn-sm btn-danger" onclick="deleteInvoice('{{ invoice.get('invoice_number', '')|e }}', '{{ invoice.get('created_at', '')|e }}', '{{ invoice.get('invoice_id', '')|e }}')">
+                                        <button class="btn btn-sm btn-danger delete-invoice-btn"
+                                                data-invoice-number="{{ invoice.get('invoice_number', '')|e }}"
+                                                data-created-at="{{ invoice.get('created_at', '')|e }}">
                                             Delete
                                         </button>
                                     </div>
@@ -274,7 +275,6 @@
         <h3>Edit Invoice</h3>
         <form id="editInvoiceForm" onsubmit="updateInvoice(event)">
             <input type="hidden" id="editInvoiceNumber" name="invoice_number">
-            <input type="hidden" id="editInvoiceId" name="invoice_id">
             <input type="hidden" id="editInvoiceCreatedAt" name="created_at">
             <div class="form-group">
                 <label>Customer Name *</label>
@@ -910,7 +910,7 @@
 </style>
 <script>
 // Store product names from server
-const allProducts = ({% if product_names %}{{ product_names|tojson }}{% else %}[]{% endif %}).filter(p => p && p.trim());
+const allProducts = JSON.parse(document.getElementById('allProductsJson')?.textContent || '[]').filter(p => p && p.trim());
 
 let invoiceItems = [];
 let selectedProductIndices = {}; // Track selected product index for each item
@@ -1221,7 +1221,6 @@ function removeEditInvoiceItem(button) {
 
 function openEditInvoiceModal(data) {
     document.getElementById('editInvoiceNumber').value = data.invoiceNumber || '';
-    document.getElementById('editInvoiceId').value = data.invoiceId || '';
     document.getElementById('editInvoiceCreatedAt').value = data.createdAt || '';
     document.getElementById('editCustomerName').value = data.customerName || '';
     document.getElementById('editInvoiceDate').value = data.invoiceDate || '';
@@ -1260,7 +1259,6 @@ function updateEditInvoiceTotal() {
 function updateInvoice(event) {
     event.preventDefault();
     const invoiceNumber = document.getElementById('editInvoiceNumber').value;
-    const invoiceId = document.getElementById('editInvoiceId').value;
     const createdAt = document.getElementById('editInvoiceCreatedAt').value;
     const customerName = document.getElementById('editCustomerName').value.trim();
     const invoiceDate = document.getElementById('editInvoiceDate').value;
@@ -1289,7 +1287,6 @@ function updateInvoice(event) {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
             invoice_number: invoiceNumber,
-            invoice_id: invoiceId,
             created_at: createdAt,
             customer_name: customerName,
             invoice_date: invoiceDate,
@@ -1310,7 +1307,7 @@ function updateInvoice(event) {
     });
 }
 
-function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmount, shipmentFee, isPaid, isFulfilled, invoiceId, createdAt) {
+function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmount, shipmentFee, isPaid, isFulfilled, createdAt) {
     // Handle optional parameters with defaults
     if (typeof isPaid === 'undefined') isPaid = false;
     if (typeof isFulfilled === 'undefined') isFulfilled = false;
@@ -1448,7 +1445,6 @@ function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmoun
     // Store data for download and status updates
     window.currentInvoiceData = {
         invoiceNumber,
-        invoiceId: invoiceId || '',
         createdAt: createdAt || '',
         customerName,
         invoiceDate,
@@ -1479,7 +1475,6 @@ function markInvoicePaid() {
     if (!window.currentInvoiceData) return;
     
     const invoiceNumber = window.currentInvoiceData.invoiceNumber;
-    const invoiceId = window.currentInvoiceData.invoiceId;
     const createdAt = window.currentInvoiceData.createdAt;
     const currentStatus = window.currentInvoiceData.isPaid;
     const newStatus = !currentStatus;
@@ -1489,7 +1484,6 @@ function markInvoicePaid() {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
             invoice_number: invoiceNumber,
-            invoice_id: invoiceId,
             created_at: createdAt,
             status_type: 'paid',
             status_value: newStatus
@@ -1526,7 +1520,6 @@ function markInvoiceFulfilled() {
     if (!window.currentInvoiceData) return;
     
     const invoiceNumber = window.currentInvoiceData.invoiceNumber;
-    const invoiceId = window.currentInvoiceData.invoiceId;
     const createdAt = window.currentInvoiceData.createdAt;
     const currentStatus = window.currentInvoiceData.isFulfilled;
     const newStatus = !currentStatus;
@@ -1536,7 +1529,6 @@ function markInvoiceFulfilled() {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
             invoice_number: invoiceNumber,
-            invoice_id: invoiceId,
             created_at: createdAt,
             status_type: 'fulfilled',
             status_value: newStatus
@@ -1744,7 +1736,7 @@ function downloadInvoice() {
     URL.revokeObjectURL(url);
 }
 
-function deleteInvoice(invoiceNumber, createdAt = '', invoiceId = '') {
+function deleteInvoice(invoiceNumber, createdAt = '') {
     if (!confirm(`Are you sure you want to delete invoice ${invoiceNumber}? This action cannot be undone.`)) {
         return;
     }
@@ -1752,7 +1744,7 @@ function deleteInvoice(invoiceNumber, createdAt = '', invoiceId = '') {
     fetch('/api/delete_invoice', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ invoice_number: invoiceNumber, created_at: createdAt, invoice_id: invoiceId })
+        body: JSON.stringify({ invoice_number: invoiceNumber, created_at: createdAt })
     })
     .then(response => response.json())
     .then(result => {
@@ -1787,7 +1779,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add event listeners for view invoice buttons
     document.querySelectorAll('.view-invoice-btn').forEach(button => {
         button.addEventListener('click', function() {
-            const invoiceId = this.getAttribute('data-invoice-id') || '';
             const invoiceNumber = this.getAttribute('data-invoice-number');
             let itemsJson = this.getAttribute('data-items');
             const customerName = this.getAttribute('data-customer-name');
@@ -1809,14 +1800,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 items = [];
             }
             
-            viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmount, shipmentFee, isPaid, isFulfilled, invoiceId, createdAt);
+            viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmount, shipmentFee, isPaid, isFulfilled, createdAt);
         });
     });
 
     // Add event listeners for edit invoice buttons
     document.querySelectorAll('.edit-invoice-btn').forEach(button => {
         button.addEventListener('click', function() {
-            const invoiceId = this.getAttribute('data-invoice-id') || '';
             const invoiceNumber = this.getAttribute('data-invoice-number');
             const itemsJson = this.getAttribute('data-items');
             const customerName = this.getAttribute('data-customer-name');
@@ -1830,7 +1820,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 items = [];
             }
             openEditInvoiceModal({
-                invoiceId,
                 invoiceNumber,
                 customerName,
                 invoiceDate,
@@ -1838,6 +1827,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 shipmentFee,
                 items
             });
+        });
+    });
+
+    // Add event listeners for delete invoice buttons
+    document.querySelectorAll('.delete-invoice-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const invoiceNumber = this.getAttribute('data-invoice-number');
+            const createdAt = this.getAttribute('data-created-at') || '';
+            deleteInvoice(invoiceNumber, createdAt);
         });
     });
 });
