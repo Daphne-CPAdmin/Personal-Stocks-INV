@@ -1173,9 +1173,11 @@ function newEditItemRow(item = null) {
     const qty = item && item.quantity ? parseInt(item.quantity, 10) : 1;
     return `
         <div class="invoice-item edit-invoice-item">
-            <div class="form-group" style="flex: 1;">
+            <div class="form-group" style="position: relative; flex: 1;">
                 <label style="display:block;margin-bottom:.25rem;font-size:.875rem;">Product Name *</label>
-                <input type="text" class="edit-item-name" value="${escapeHtml(name)}" required>
+                <input type="text" class="edit-item-name item-name-input" value="${escapeHtml(name)}" placeholder="Type to search products..." autocomplete="off" required>
+                <input type="hidden" class="edit-item-name-hidden item-name-hidden" value="${escapeHtml(name)}" required>
+                <div class="autocomplete-suggestions" style="display: none;"></div>
             </div>
             <div class="form-group" style="flex: 0 0 140px;">
                 <label style="display:block;margin-bottom:.25rem;font-size:.875rem;">Price *</label>
@@ -1193,6 +1195,10 @@ function newEditItemRow(item = null) {
 function addEditInvoiceItem(item = null) {
     const container = document.getElementById('editInvoiceItems');
     container.insertAdjacentHTML('beforeend', newEditItemRow(item));
+    const newRow = container.lastElementChild;
+    if (newRow) {
+        initializeAutocomplete(newRow);
+    }
     updateEditInvoiceTotal();
 }
 
@@ -1249,7 +1255,9 @@ function updateInvoice(event) {
 
     const items = [];
     rows.forEach(row => {
-        const name = row.querySelector('.edit-item-name')?.value?.trim() || '';
+        const selectedName = row.querySelector('.edit-item-name-hidden')?.value?.trim() || '';
+        const typedName = row.querySelector('.edit-item-name')?.value?.trim() || '';
+        const name = selectedName || typedName;
         const price = parseFloat(row.querySelector('.edit-item-price')?.value || 0);
         const quantity = parseInt(row.querySelector('.edit-item-qty')?.value || 0, 10);
         if (name && price > 0 && quantity > 0) {
