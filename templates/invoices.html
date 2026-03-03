@@ -403,7 +403,7 @@
                 <span class="invoice-totals-label-compact">Balance Due:</span>
                 <span class="invoice-totals-value-compact" id="viewBalanceDue">₱0.00</span>
             </div>
-            <div class="invoice-totals-row-compact" style="display:block;text-align:left;">
+            <div class="invoice-totals-row-compact" id="partialPaymentPanel" style="display:none;text-align:left;">
                 <label for="viewPaymentAmount" style="display:block;margin-bottom:0.25rem;">Add Partial Payment (₱)</label>
                 <input id="viewPaymentAmount" type="number" step="0.01" min="0" placeholder="0.00" style="width:100%;margin-bottom:0.5rem;">
                 <label for="viewPaymentReference" style="display:block;margin-bottom:0.25rem;">Reference # (Optional)</label>
@@ -424,6 +424,7 @@
         
         <div class="invoice-view-actions-compact">
             <button class="btn btn-primary btn-sm" id="savePaymentBtn" onclick="addInvoicePayment()">Save Payment</button>
+            <button class="btn btn-warning btn-sm" id="markPartialBtn" onclick="togglePartialPaymentInput()">Partially Paid</button>
             <button class="btn btn-success btn-sm" id="markPaidBtn" onclick="markInvoicePaid()">Mark as Paid</button>
             <button class="btn btn-info btn-sm" id="markFulfilledBtn" onclick="markInvoiceFulfilled()">Mark as Fulfilled</button>
             <button class="btn btn-secondary btn-sm" onclick="downloadInvoice()">Download</button>
@@ -1515,6 +1516,8 @@ function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmoun
     const fulfilledBadge = document.getElementById('fulfilledBadge');
     const markPaidBtn = document.getElementById('markPaidBtn');
     const markFulfilledBtn = document.getElementById('markFulfilledBtn');
+    const markPartialBtn = document.getElementById('markPartialBtn');
+    const partialPaymentPanel = document.getElementById('partialPaymentPanel');
     
     if (isPaid) {
         paidBadge.style.display = 'inline-block';
@@ -1526,6 +1529,13 @@ function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmoun
         markPaidBtn.textContent = 'Mark as Paid';
         markPaidBtn.classList.remove('btn-warning');
         markPaidBtn.classList.add('btn-success');
+    }
+
+    if (partialPaymentPanel) {
+        partialPaymentPanel.style.display = 'none';
+    }
+    if (markPartialBtn) {
+        markPartialBtn.style.display = balanceDue > 0 ? 'inline-block' : 'none';
     }
     
     if (isFulfilled) {
@@ -1667,11 +1677,30 @@ function addInvoicePayment() {
             markPaidBtn.classList.remove('btn-success');
             markPaidBtn.classList.add('btn-warning');
         }
+        const markPartialBtn = document.getElementById('markPartialBtn');
+        const partialPaymentPanel = document.getElementById('partialPaymentPanel');
+        if (markPartialBtn) {
+            markPartialBtn.style.display = updatedBalance > 0 ? 'inline-block' : 'none';
+        }
+        if (partialPaymentPanel && updatedBalance <= 0) {
+            partialPaymentPanel.style.display = 'none';
+        }
         alert('Payment saved successfully.');
     })
     .catch(error => {
         alert('Error: ' + error);
     });
+}
+
+function togglePartialPaymentInput() {
+    const panel = document.getElementById('partialPaymentPanel');
+    const amountInput = document.getElementById('viewPaymentAmount');
+    if (!panel) return;
+    const shouldShow = panel.style.display === 'none' || panel.style.display === '';
+    panel.style.display = shouldShow ? 'block' : 'none';
+    if (shouldShow && amountInput) {
+        amountInput.focus();
+    }
 }
 
 function parsePaymentHistory(paymentHistory) {

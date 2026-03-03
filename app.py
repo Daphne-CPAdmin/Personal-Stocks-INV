@@ -161,6 +161,19 @@ def _parse_payment_history(value):
         })
     return normalized
 
+
+def _normalize_invoice_boolean_columns(df):
+    """Keep invoice boolean fields as string values for Sheets compatibility."""
+    bool_cols = ['paid', 'fulfilled']
+    truthy = {'true', '1', 'yes'}
+    for col in bool_cols:
+        if col not in df.columns:
+            continue
+        df[col] = df[col].apply(
+            lambda v: 'True' if str(v).strip().lower() in truthy else 'False'
+        )
+    return df
+
 # Google Sheets URLs from environment
 INVENTORY_SHEET_URL = os.getenv('INVENTORY_SHEET_URL')
 SOLD_ITEMS_SHEET_URL = os.getenv('SOLD_ITEMS_SHEET_URL')
@@ -1032,7 +1045,7 @@ def create_invoice():
             required_columns = INVOICE_REQUIRED_COLUMNS
             for col in required_columns:
                 if col not in df.columns and col in ['fulfilled', 'paid']:
-                    df[col] = False if col in ['fulfilled', 'paid'] else ''
+                    df[col] = 'False'
                 elif col not in df.columns:
                     df[col] = ''
             df = df[required_columns]
@@ -1043,6 +1056,7 @@ def create_invoice():
                 df['fulfilled'] = False
             new_invoice_df = pd.DataFrame(invoice_rows)
             df = pd.concat([df, new_invoice_df], ignore_index=True)
+            df = _normalize_invoice_boolean_columns(df)
             connector.write_to_sheets(df, INVOICES_SHEET_URL)
         
         # Update customer records with product-level details
@@ -1131,7 +1145,7 @@ def update_invoice_status():
             
             # Ensure columns exist
             if status_type not in df.columns:
-                df[status_type] = False
+                df[status_type] = 'False'
             
             # Update all rows for the targeted invoice instance.
             mask = _build_invoice_mask(df, invoice_number=invoice_number, created_at=created_at)
@@ -1151,7 +1165,8 @@ def update_invoice_status():
             if isinstance(status_value, str):
                 status_value = status_value.lower() in ['true', '1', 'yes']
             
-            df.loc[mask, status_type] = bool(status_value)
+            df.loc[mask, status_type] = 'True' if bool(status_value) else 'False'
+            df = _normalize_invoice_boolean_columns(df)
             connector.write_to_sheets(df, INVOICES_SHEET_URL)
             logger.info(f"Updated invoice {invoice_number} {status_type} status to {status_value}")
         
@@ -1284,10 +1299,11 @@ def update_invoice():
         required_columns = INVOICE_REQUIRED_COLUMNS
         for col in required_columns:
             if col not in updated_df.columns and col in ['fulfilled', 'paid']:
-                updated_df[col] = False if col in ['fulfilled', 'paid'] else ''
+                updated_df[col] = 'False'
             elif col not in updated_df.columns:
                 updated_df[col] = ''
         updated_df = updated_df[required_columns]
+        updated_df = _normalize_invoice_boolean_columns(updated_df)
         connector.write_to_sheets(updated_df, INVOICES_SHEET_URL)
 
         return jsonify({
@@ -1363,14 +1379,15 @@ def add_invoice_payment():
         if payment_reference:
             df.loc[mask, 'payment_reference'] = payment_reference
         df.loc[mask, 'payment_history'] = json.dumps(payment_history)
-        df.loc[mask, 'paid'] = bool(is_paid)
+        df.loc[mask, 'paid'] = 'True' if bool(is_paid) else 'False'
 
         for col in INVOICE_REQUIRED_COLUMNS:
             if col not in df.columns and col in ['fulfilled', 'paid']:
-                df[col] = False
+                df[col] = 'False'
             elif col not in df.columns:
                 df[col] = ''
         df = df[INVOICE_REQUIRED_COLUMNS]
+        df = _normalize_invoice_boolean_columns(df)
 
         connector.write_to_sheets(df, INVOICES_SHEET_URL)
         return jsonify({
