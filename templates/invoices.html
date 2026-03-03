@@ -75,6 +75,14 @@
                                                 data-fulfilled="{{ invoice.get('fulfilled', False)|tojson }}">
                                             View
                                         </button>
+                                        <button class="btn btn-sm btn-secondary edit-invoice-btn"
+                                                data-invoice-number="{{ invoice.get('invoice_number', '')|e }}"
+                                                data-items='{{ invoice.get('items_parsed', [])|tojson }}'
+                                                data-customer-name="{{ invoice.get('customer_name', '')|e }}"
+                                                data-invoice-date="{{ invoice.get('invoice_date', '')|e }}"
+                                                data-shipment-fee="{{ shipment_fee }}">
+                                            Edit
+                                        </button>
                                         <button class="btn btn-sm btn-danger" onclick="deleteInvoice('{{ invoice.get('invoice_number', '')|e }}')">
                                             Delete
                                         </button>
@@ -103,6 +111,14 @@
                                                 data-paid="{{ invoice.get('paid', False)|tojson }}"
                                                 data-fulfilled="{{ invoice.get('fulfilled', False)|tojson }}">
                                             View
+                                        </button>
+                                        <button class="btn btn-sm btn-secondary edit-invoice-btn"
+                                                data-invoice-number="{{ invoice.get('invoice_number', '')|e }}"
+                                                data-items='{{ invoice.get('items_parsed', [])|tojson }}'
+                                                data-customer-name="{{ invoice.get('customer_name', '')|e }}"
+                                                data-invoice-date="{{ invoice.get('invoice_date', '')|e }}"
+                                                data-shipment-fee="{{ shipment_fee }}">
+                                            Edit
                                         </button>
                                         <button class="btn btn-sm btn-danger" onclick="deleteInvoice('{{ invoice.get('invoice_number', '')|e }}')">
                                             Delete
@@ -238,6 +254,49 @@
             <div class="form-actions">
                 <button type="button" class="btn btn-secondary" onclick="closeCreateInvoiceModal()">Cancel</button>
                 <button type="submit" class="btn btn-primary">Create Invoice</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Invoice Modal -->
+<div id="editInvoiceModal" class="modal">
+    <div class="modal-content modal-large">
+        <span class="close" onclick="closeEditInvoiceModal()">&times;</span>
+        <h3>Edit Invoice</h3>
+        <form id="editInvoiceForm" onsubmit="updateInvoice(event)">
+            <input type="hidden" id="editInvoiceNumber" name="invoice_number">
+            <div class="form-group">
+                <label>Customer Name *</label>
+                <input type="text" id="editCustomerName" name="customer_name" required>
+            </div>
+            <div class="form-group">
+                <label>Invoice Date *</label>
+                <input type="date" id="editInvoiceDate" name="invoice_date" required>
+            </div>
+            <div class="invoice-items-section">
+                <h4>Items</h4>
+                <div id="editInvoiceItems"></div>
+                <button type="button" class="btn btn-secondary" onclick="addEditInvoiceItem()">+ Add Item</button>
+            </div>
+            <div class="form-group" style="margin-top: 1rem;">
+                <label>Shipment/Delivery Fee (₱)</label>
+                <input type="number" step="0.01" id="editShipmentFee" name="shipment_fee" value="0" oninput="updateEditInvoiceTotal()">
+            </div>
+            <div class="invoice-total">
+                <div style="display:flex;justify-content:space-between;margin-bottom:.4rem;">
+                    <span>Subtotal:</span><span>₱<span id="editInvoiceSubtotal">0.00</span></span>
+                </div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:.4rem;">
+                    <span>Shipment:</span><span>₱<span id="editShipmentDisplay">0.00</span></span>
+                </div>
+                <div style="display:flex;justify-content:space-between;border-top:2px solid #7c3aed;padding-top:.4rem;">
+                    <strong>Total:</strong><strong>₱<span id="editInvoiceTotal">0.00</span></strong>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeEditInvoiceModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Update Invoice</button>
             </div>
         </form>
     </div>
@@ -562,6 +621,43 @@
     font-size: 12px;
     padding: 8px 16px;
     font-family: 'Merriweather', serif;
+}
+
+@media (max-width: 768px) {
+    #createInvoiceModal .modal-content,
+    #editInvoiceModal .modal-content,
+    #viewInvoiceModal .modal-content {
+        width: 96%;
+        margin: 2% auto;
+        padding: 1rem;
+    }
+
+    .invoice-item {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.6rem;
+        padding: 0.75rem;
+    }
+
+    .invoice-item .form-group {
+        width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+
+    .invoice-item .btn-danger {
+        align-self: stretch !important;
+        margin-top: 0.25rem !important;
+    }
+
+    .invoice-view-table-compact th,
+    .invoice-view-table-compact td {
+        font-size: 11px;
+        padding: 8px 4px;
+    }
+
+    .invoice-view-actions-compact .btn {
+        flex: 1 1 45%;
+    }
 }
 
 .invoice-total {
@@ -1031,27 +1127,134 @@ function createInvoice(event) {
     });
 }
 
+function newEditItemRow(item = null) {
+    const name = item && item.name ? item.name : '';
+    const price = item && item.price ? parseFloat(item.price) : 0;
+    const qty = item && item.quantity ? parseInt(item.quantity, 10) : 1;
+    return `
+        <div class="invoice-item edit-invoice-item">
+            <div class="form-group" style="flex: 1;">
+                <label style="display:block;margin-bottom:.25rem;font-size:.875rem;">Product Name *</label>
+                <input type="text" class="edit-item-name" value="${escapeHtml(name)}" required>
+            </div>
+            <div class="form-group" style="flex: 0 0 140px;">
+                <label style="display:block;margin-bottom:.25rem;font-size:.875rem;">Price *</label>
+                <input type="number" step="0.01" class="edit-item-price" value="${price.toFixed(2)}" required oninput="updateEditInvoiceTotal()">
+            </div>
+            <div class="form-group" style="flex: 0 0 110px;">
+                <label style="display:block;margin-bottom:.25rem;font-size:.875rem;">Qty *</label>
+                <input type="number" class="edit-item-qty" value="${qty}" min="1" required oninput="updateEditInvoiceTotal()">
+            </div>
+            <button type="button" class="btn btn-sm btn-danger" onclick="removeEditInvoiceItem(this)" style="align-self:flex-end;margin-top:1.5rem;">Remove</button>
+        </div>
+    `;
+}
+
+function addEditInvoiceItem(item = null) {
+    const container = document.getElementById('editInvoiceItems');
+    container.insertAdjacentHTML('beforeend', newEditItemRow(item));
+    updateEditInvoiceTotal();
+}
+
+function removeEditInvoiceItem(button) {
+    const rows = document.querySelectorAll('#editInvoiceItems .edit-invoice-item');
+    if (rows.length <= 1) return;
+    button.closest('.edit-invoice-item').remove();
+    updateEditInvoiceTotal();
+}
+
+function openEditInvoiceModal(data) {
+    document.getElementById('editInvoiceNumber').value = data.invoiceNumber || '';
+    document.getElementById('editCustomerName').value = data.customerName || '';
+    document.getElementById('editInvoiceDate').value = data.invoiceDate || '';
+    document.getElementById('editShipmentFee').value = (parseFloat(data.shipmentFee || 0)).toFixed(2);
+    const itemsContainer = document.getElementById('editInvoiceItems');
+    itemsContainer.innerHTML = '';
+    const items = Array.isArray(data.items) ? data.items : [];
+    if (items.length === 0) {
+        addEditInvoiceItem();
+    } else {
+        items.forEach(i => addEditInvoiceItem(i));
+    }
+    updateEditInvoiceTotal();
+    document.getElementById('editInvoiceModal').style.display = 'block';
+}
+
+function closeEditInvoiceModal() {
+    document.getElementById('editInvoiceModal').style.display = 'none';
+}
+
+function updateEditInvoiceTotal() {
+    const rows = document.querySelectorAll('#editInvoiceItems .edit-invoice-item');
+    let subtotal = 0;
+    rows.forEach(row => {
+        const price = parseFloat(row.querySelector('.edit-item-price')?.value || 0);
+        const qty = parseFloat(row.querySelector('.edit-item-qty')?.value || 0);
+        subtotal += (price * qty);
+    });
+    const shipment = parseFloat(document.getElementById('editShipmentFee')?.value || 0);
+    const total = subtotal + shipment;
+    document.getElementById('editInvoiceSubtotal').textContent = subtotal.toFixed(2);
+    document.getElementById('editShipmentDisplay').textContent = shipment.toFixed(2);
+    document.getElementById('editInvoiceTotal').textContent = total.toFixed(2);
+}
+
+function updateInvoice(event) {
+    event.preventDefault();
+    const invoiceNumber = document.getElementById('editInvoiceNumber').value;
+    const customerName = document.getElementById('editCustomerName').value.trim();
+    const invoiceDate = document.getElementById('editInvoiceDate').value;
+    const shipmentFee = parseFloat(document.getElementById('editShipmentFee').value || 0);
+    const rows = document.querySelectorAll('#editInvoiceItems .edit-invoice-item');
+
+    const items = [];
+    rows.forEach(row => {
+        const name = row.querySelector('.edit-item-name')?.value?.trim() || '';
+        const price = parseFloat(row.querySelector('.edit-item-price')?.value || 0);
+        const quantity = parseInt(row.querySelector('.edit-item-qty')?.value || 0, 10);
+        if (name && price > 0 && quantity > 0) {
+            items.push({ name, price, quantity, subtotal: price * quantity });
+        }
+    });
+
+    if (!invoiceNumber || !customerName || !invoiceDate || items.length === 0) {
+        alert('Please complete customer, date, and at least one valid item.');
+        return;
+    }
+
+    fetch('/api/update_invoice', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            invoice_number: invoiceNumber,
+            customer_name: customerName,
+            invoice_date: invoiceDate,
+            shipment_fee: shipmentFee,
+            items: items
+        })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + result.message);
+        }
+    })
+    .catch(error => {
+        alert('Error: ' + error);
+    });
+}
+
 function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmount, shipmentFee, isPaid, isFulfilled) {
     // Handle optional parameters with defaults
     if (typeof isPaid === 'undefined') isPaid = false;
     if (typeof isFulfilled === 'undefined') isFulfilled = false;
     
-    console.log('viewInvoice called with:', {
-        invoiceNumber,
-        items,
-        itemsType: typeof items,
-        itemsIsArray: Array.isArray(items),
-        customerName,
-        invoiceDate,
-        totalAmount,
-        shipmentFee
-    });
-    
     let itemsList = [];
     try {
         // Handle different input types safely
         if (items === null || items === undefined) {
-            console.warn('Items is null or undefined');
             itemsList = [];
         } else if (typeof items === 'string') {
             // Try JSON first
@@ -1060,30 +1263,24 @@ function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmoun
                 const cleanedItems = items.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
                 const parsed = JSON.parse(cleanedItems);
                 itemsList = Array.isArray(parsed) ? parsed : [];
-                console.log('Parsed string items:', itemsList);
             } catch (jsonError) {
-                console.warn('Could not parse items as JSON:', jsonError, 'Raw string:', items);
                 itemsList = [];
             }
         } else if (Array.isArray(items)) {
             itemsList = items;
-            console.log('Items is already an array:', itemsList);
         } else if (items && typeof items === 'object') {
             // Handle case where items might be an object - convert to array
             itemsList = Object.values(items).filter(v => v !== null && v !== undefined);
-            console.log('Converted object to array:', itemsList);
         }
         
         // Ensure itemsList is an array and has valid structure
         if (!Array.isArray(itemsList)) {
-            console.warn('itemsList is not an array:', itemsList);
             itemsList = [];
         }
         
         // Validate each item has required fields - be more lenient
         itemsList = itemsList.map(item => {
             if (!item || typeof item !== 'object') {
-                console.warn('Invalid item:', item);
                 return null;
             }
             // Normalize field names
@@ -1094,7 +1291,6 @@ function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmoun
             
             // Only filter out if name is completely missing
             if (!itemName || itemName === 'N/A' || itemName.trim() === '') {
-                console.warn('Skipping item with no name:', item);
                 return null;
             }
             
@@ -1106,10 +1302,7 @@ function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmoun
             };
             return normalizedItem;
         }).filter(item => item !== null && item.name && item.name.trim() !== '');
-        
-        console.log('Final processed items:', itemsList.length, 'items', itemsList);
     } catch(e) {
-        console.error('Error parsing items:', e, e.stack);
         itemsList = [];
     }
     
@@ -1300,14 +1493,6 @@ function markInvoiceFulfilled() {
     .catch(error => {
         alert('Error: ' + error);
     });
-}
-
-// Close modal when clicking outside
-window.onclick = function(event) {
-    const viewModal = document.getElementById('viewInvoiceModal');
-    if (event.target == viewModal) {
-        closeViewInvoiceModal();
-    }
 }
 
 function downloadInvoice() {
@@ -1544,23 +1729,53 @@ document.addEventListener('DOMContentLoaded', function() {
                     itemsJson = itemsJson.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
                 }
                 items = JSON.parse(itemsJson || '[]');
-                console.log('Parsed items from button:', items);
             } catch(e) {
-                console.error('Error parsing items:', e, 'Raw itemsJson:', itemsJson);
                 items = [];
             }
             
             viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmount, shipmentFee, isPaid, isFulfilled);
         });
     });
+
+    // Add event listeners for edit invoice buttons
+    document.querySelectorAll('.edit-invoice-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const invoiceNumber = this.getAttribute('data-invoice-number');
+            const itemsJson = this.getAttribute('data-items');
+            const customerName = this.getAttribute('data-customer-name');
+            const invoiceDate = this.getAttribute('data-invoice-date');
+            const shipmentFee = parseFloat(this.getAttribute('data-shipment-fee') || 0);
+            let items = [];
+            try {
+                items = JSON.parse(itemsJson || '[]');
+            } catch (e) {
+                items = [];
+            }
+            openEditInvoiceModal({
+                invoiceNumber,
+                customerName,
+                invoiceDate,
+                shipmentFee,
+                items
+            });
+        });
+    });
 });
 
-window.onclick = function(event) {
-    const modal = document.getElementById('createInvoiceModal');
-    if (event.target == modal) {
+window.addEventListener('click', function(event) {
+    const createModal = document.getElementById('createInvoiceModal');
+    const viewModal = document.getElementById('viewInvoiceModal');
+    const editModal = document.getElementById('editInvoiceModal');
+    if (event.target === createModal) {
         closeCreateInvoiceModal();
     }
-}
+    if (event.target === viewModal) {
+        closeViewInvoiceModal();
+    }
+    if (event.target === editModal) {
+        closeEditInvoiceModal();
+    }
+});
 </script>
 {% endblock %}
 

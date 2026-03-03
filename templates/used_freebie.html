@@ -19,6 +19,7 @@
                     <th>Total Cost</th>
                     <th>Date Used</th>
                     <th>Remarks</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -31,11 +32,16 @@
                         <td>₱{{ "%.2f"|format(item.get('quantity', 0) * item.get('total_cost_per_unit', 0)) }}</td>
                         <td>{{ item.get('date_used', '-') }}</td>
                         <td>{{ item.get('remarks', '-') }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" onclick="openUsedFreebieEditModal({{ item.get('row_index', loop.index0) }}, '{{ item.get('product_name', '')|e }}', 'used', {{ item.get('quantity', 0) }}, {{ item.get('total_cost_per_unit', 0) }}, '{{ item.get('remarks', '')|e }}')">
+                                Edit
+                            </button>
+                        </td>
                     </tr>
                     {% endfor %}
                 {% else %}
                     <tr>
-                        <td colspan="6" class="text-center">No used items yet.</td>
+                        <td colspan="7" class="text-center">No used items yet.</td>
                     </tr>
                 {% endif %}
             </tbody>
@@ -55,6 +61,7 @@
                     <th>Total Cost</th>
                     <th>Date Given</th>
                     <th>Remarks</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -67,16 +74,113 @@
                         <td>₱{{ "%.2f"|format(item.get('quantity', 0) * item.get('total_cost_per_unit', 0)) }}</td>
                         <td>{{ item.get('date_used', '-') }}</td>
                         <td>{{ item.get('remarks', '-') }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" onclick="openUsedFreebieEditModal({{ item.get('row_index', loop.index0) }}, '{{ item.get('product_name', '')|e }}', 'freebie', {{ item.get('quantity', 0) }}, {{ item.get('total_cost_per_unit', 0) }}, '{{ item.get('remarks', '')|e }}')">
+                                Edit
+                            </button>
+                        </td>
                     </tr>
                     {% endfor %}
                 {% else %}
                     <tr>
-                        <td colspan="6" class="text-center">No freebie items yet.</td>
+                        <td colspan="7" class="text-center">No freebie items yet.</td>
                     </tr>
                 {% endif %}
             </tbody>
         </table>
     </div>
 </div>
+
+<div id="usedFreebieEditModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeUsedFreebieEditModal()">&times;</span>
+        <h3>Edit Used/Freebie Item</h3>
+        <form id="usedFreebieEditForm" onsubmit="updateUsedFreebieItem(event)">
+            <input type="hidden" id="ufRowIndex" name="row_index">
+            <div class="form-group">
+                <label>Product Name</label>
+                <input type="text" id="ufProductName" readonly>
+            </div>
+            <div class="form-group">
+                <label>Type *</label>
+                <select id="ufStatus" name="status" required>
+                    <option value="used">Used</option>
+                    <option value="freebie">Freebie</option>
+                </select>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Quantity *</label>
+                    <input type="number" id="ufQuantity" name="quantity" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label>Cost Per Unit (₱) *</label>
+                    <input type="number" id="ufCostPerUnit" name="total_cost_per_unit" min="0" step="0.01" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Remarks</label>
+                <textarea id="ufRemarks" name="remarks" rows="3"></textarea>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeUsedFreebieEditModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Update Item</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openUsedFreebieEditModal(rowIndex, productName, status, quantity, costPerUnit, remarks) {
+    document.getElementById('ufRowIndex').value = rowIndex;
+    document.getElementById('ufProductName').value = productName || '';
+    document.getElementById('ufStatus').value = status || 'used';
+    document.getElementById('ufQuantity').value = quantity || 1;
+    document.getElementById('ufCostPerUnit').value = parseFloat(costPerUnit || 0).toFixed(2);
+    document.getElementById('ufRemarks').value = remarks || '';
+    document.getElementById('usedFreebieEditModal').style.display = 'block';
+}
+
+function closeUsedFreebieEditModal() {
+    document.getElementById('usedFreebieEditModal').style.display = 'none';
+}
+
+function updateUsedFreebieItem(event) {
+    event.preventDefault();
+    const data = {
+        row_index: parseInt(document.getElementById('ufRowIndex').value, 10),
+        status: document.getElementById('ufStatus').value,
+        quantity: parseInt(document.getElementById('ufQuantity').value, 10),
+        total_cost_per_unit: parseFloat(document.getElementById('ufCostPerUnit').value || 0),
+        remarks: document.getElementById('ufRemarks').value || ''
+    };
+
+    fetch('/api/update_used_freebie_item', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + result.message);
+        }
+    })
+    .catch(error => {
+        alert('Error: ' + error);
+    });
+}
+
+window.addEventListener('click', function(event) {
+    const modal = document.getElementById('usedFreebieEditModal');
+    if (event.target === modal) {
+        closeUsedFreebieEditModal();
+    }
+});
+</script>
 {% endblock %}
 

@@ -49,6 +49,18 @@ body::before {
     z-index: 0;
 }
 
+body::after {
+    content: '🦋   🦋   🦋';
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    font-size: 1.1rem;
+    opacity: 0.08;
+    pointer-events: none;
+    z-index: 0;
+    animation: float 10s ease-in-out infinite;
+}
+
 .main-content {
     position: relative;
     z-index: 1;
@@ -200,6 +212,8 @@ body::before {
     border: 1px solid var(--border-color);
     position: relative;
     overflow: hidden;
+    content-visibility: auto;
+    contain-intrinsic-size: 500px;
 }
 
 .card::before {
@@ -276,7 +290,9 @@ body::before {
 }
 
 .table-container {
-    overflow-x: auto;
+    overflow: auto;
+    max-height: 65vh;
+    border-radius: 0.75rem;
 }
 
 .data-table {
@@ -289,33 +305,43 @@ body::before {
     background-color: var(--bg-color);
 }
 
+.data-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+}
+
 .data-table th {
-    padding: 0.5rem 0.4rem;
+    padding: 1rem;
     text-align: left;
     font-weight: 700;
     font-family: 'Merriweather', Georgia, serif;
     color: var(--purple-deep);
     border-bottom: 2px solid var(--lavender-medium);
     background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
-    font-size: 0.7rem;
-    white-space: nowrap;
 }
 
 .data-table td {
-    padding: 0.5rem 0.4rem;
+    padding: 0.75rem 0.5rem;
     border-bottom: 1px solid var(--border-color);
     color: var(--text-primary);
-    font-size: 0.7rem;
+    font-size: 0.875rem;
     font-family: 'Merriweather', Georgia, serif;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 150px;
+    max-width: 200px;
 }
 
 .data-table td:first-child {
-    max-width: 200px;
+    max-width: 250px;
     font-weight: 500;
+}
+
+.data-table th {
+    padding: 0.75rem 0.5rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
 }
 
 .data-table tbody tr:hover {
@@ -632,6 +658,25 @@ body::before {
     
     .stat-card {
         min-width: 200px;
+    }
+
+    .table-container {
+        max-height: 58vh;
+    }
+
+    .modal-content {
+        width: 96%;
+        margin: 2% auto;
+        padding: 1rem;
+    }
+
+    .form-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .form-actions .btn {
+        width: 100%;
     }
 }
 

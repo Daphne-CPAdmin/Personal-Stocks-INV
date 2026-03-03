@@ -433,8 +433,8 @@ def update_status():
             else:
                 current_remaining = 0
             
-            # Decrement remaining_qty if status is sold, used, or freebie
-            if new_status in ['sold', 'used', 'freebie']:
+            # Decrement remaining_qty if action consumes stock.
+            if new_status in ['sold', 'used', 'freebie', 'raffled']:
                 new_remaining = max(0, current_remaining - quantity_used)
                 # Ensure remaining_qty column exists
                 if 'remaining_qty' not in df.columns:
@@ -484,6 +484,10 @@ def update_status():
             # Don't update status column here - it will be calculated based on remaining_qty
             df.at[product_id, 'remarks'] = remarks
             
+            # Keep stored status aligned immediately after update as well.
+            current_remaining_after = safe_int(df.at[product_id, 'remaining_qty'], 0)
+            df.at[product_id, 'status'] = 'in_stock' if current_remaining_after > 0 else 'out_of_stock'
+
             if new_status == 'sold' and selling_price:
                     
                     selling_price = safe_float(selling_price, 0.0)
@@ -634,7 +638,12 @@ def used_freebie():
     try:
         if USED_FREEBIE_SHEET_URL:
             df = connector.read_from_sheets(USED_FREEBIE_SHEET_URL)
-            used_items = df.to_dict('records') if not df.empty else []
+            if not df.empty:
+                # Keep original row index so edit actions update correct sheet row.
+                df = df.reset_index(drop=False).rename(columns={'index': 'row_index'})
+                used_items = df.to_dict('records')
+            else:
+                used_items = []
         else:
             used_items = []
     except Exception as e:
@@ -652,6 +661,45 @@ def used_freebie():
         freebie = []
     
     return render_template('used_freebie.html', used_items=used, freebie_items=freebie)
+
+@app.route('/api/update_used_freebie_item', methods=['POST'])
+def update_used_freebie_item():
+    """Update used/freebie item details."""
+    try:
+        data = request.json or {}
+        row_index = int(data.get('row_index'))
+        status = str(data.get('status', '')).strip().lower()
+        quantity = int(float(data.get('quantity', 0) or 0))
+        total_cost_per_unit = float(data.get('total_cost_per_unit', 0) or 0)
+        remarks = str(data.get('remarks', '') or '')
+
+        if status not in ['used', 'freebie']:
+            return jsonify({'success': False, 'message': 'Status must be used or freebie'}), 400
+        if quantity <= 0:
+            return jsonify({'success': False, 'message': 'Quantity must be greater than zero'}), 400
+        if total_cost_per_unit < 0:
+            return jsonify({'success': False, 'message': 'Cost per unit cannot be negative'}), 400
+        if not USED_FREEBIE_SHEET_URL:
+            return jsonify({'success': False, 'message': 'Used/Freebie sheet is not configured'}), 400
+
+        df = connector.read_from_sheets(USED_FREEBIE_SHEET_URL)
+        if df.empty or row_index < 0 or row_index >= len(df):
+            return jsonify({'success': False, 'message': 'Item not found'}), 404
+
+        df.at[row_index, 'status'] = status
+        df.at[row_index, 'quantity'] = quantity
+        df.at[row_index, 'total_cost_per_unit'] = total_cost_per_unit
+        df.at[row_index, 'remarks'] = remarks
+
+        if 'date_used' in df.columns:
+            df.at[row_index, 'date_used'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        connector.write_to_sheets(df, USED_FREEBIE_SHEET_URL)
+        logger.info(f"Updated used/freebie row {row_index} -> {status}")
+        return jsonify({'success': True, 'message': 'Item updated successfully'})
+    except Exception as e:
+        logger.error(f"Error updating used/freebie item: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 400
 
 @app.route('/invoices')
 def invoices():
@@ -955,6 +1003,155 @@ def update_invoice_status():
         return jsonify({'success': True, 'message': f'Invoice {status_type} status updated successfully'})
     except Exception as e:
         logger.error(f"Error updating invoice status: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 400
+
+@app.route('/api/update_invoice', methods=['POST'])
+def update_invoice():
+    """Update an existing invoice and its line items."""
+    try:
+        data = request.json or {}
+        invoice_number = data.get('invoice_number')
+        customer_name = (data.get('customer_name') or '').strip()
+        invoice_date = (data.get('invoice_date') or '').strip()
+        shipment_fee = float(data.get('shipment_fee', 0) or 0)
+        items = data.get('items', [])
+
+        if not invoice_number:
+            return jsonify({'success': False, 'message': 'Invoice number is required'}), 400
+        if not customer_name:
+            return jsonify({'success': False, 'message': 'Customer name is required'}), 400
+        if not invoice_date:
+            return jsonify({'success': False, 'message': 'Invoice date is required'}), 400
+        if not isinstance(items, list) or len(items) == 0:
+            return jsonify({'success': False, 'message': 'At least one invoice item is required'}), 400
+
+        normalized_items = []
+        subtotal = 0.0
+        for item in items:
+            name = str(item.get('name', '')).strip()
+            price = float(item.get('price', 0) or 0)
+            quantity = int(float(item.get('quantity', 0) or 0))
+            if not name or price <= 0 or quantity <= 0:
+                continue
+            line_total = float(item.get('subtotal', price * quantity) or (price * quantity))
+            subtotal += line_total
+            normalized_items.append({
+                'name': name,
+                'price': price,
+                'quantity': quantity,
+                'subtotal': line_total
+            })
+
+        if len(normalized_items) == 0:
+            return jsonify({'success': False, 'message': 'No valid invoice items found'}), 400
+
+        if not INVOICES_SHEET_URL:
+            return jsonify({'success': False, 'message': 'Invoice sheet is not configured'}), 400
+
+        df = connector.read_from_sheets(INVOICES_SHEET_URL)
+        if df.empty:
+            return jsonify({'success': False, 'message': 'Invoice not found'}), 404
+
+        existing_mask = df['invoice_number'] == invoice_number
+        if not existing_mask.any():
+            return jsonify({'success': False, 'message': 'Invoice not found'}), 404
+
+        existing_rows = df[existing_mask]
+        first_row = existing_rows.iloc[0]
+        created_at = first_row.get('created_at', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        paid = first_row.get('paid', False)
+        fulfilled = first_row.get('fulfilled', False)
+
+        if isinstance(paid, str):
+            paid = paid.lower() in ['true', '1', 'yes']
+        if isinstance(fulfilled, str):
+            fulfilled = fulfilled.lower() in ['true', '1', 'yes']
+
+        total_amount = subtotal + shipment_fee
+        products_summary = "; ".join(
+            f"{i['name']} ({i['quantity']} pcs x PHP {i['price']:.2f}) = PHP {i['subtotal']:.2f}"
+            for i in normalized_items
+        )
+
+        rebuilt_rows = []
+        for item in normalized_items:
+            rebuilt_rows.append({
+                'invoice_number': invoice_number,
+                'customer_name': customer_name,
+                'products_summary': products_summary,
+                'product_name': item['name'],
+                'price_sold': item['price'],
+                'quantity': item['quantity'],
+                'line_total': item['subtotal'],
+                'shipment_fee': shipment_fee,
+                'total_amount': total_amount,
+                'invoice_date': invoice_date,
+                'created_at': created_at,
+                'paid': bool(paid),
+                'fulfilled': bool(fulfilled)
+            })
+
+        remaining_df = df[~existing_mask]
+        updated_df = pd.concat([remaining_df, pd.DataFrame(rebuilt_rows)], ignore_index=True)
+        connector.write_to_sheets(updated_df, INVOICES_SHEET_URL)
+
+        return jsonify({
+            'success': True,
+            'message': 'Invoice updated successfully',
+            'invoice_number': invoice_number,
+            'subtotal': subtotal,
+            'total_amount': total_amount
+        })
+    except Exception as e:
+        logger.error(f"Error updating invoice: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 400
+
+@app.route('/api/update_sold_item', methods=['POST'])
+def update_sold_item():
+    """Update a sold item (remarks, price, tithe kept)."""
+    try:
+        data = request.json or {}
+        item_id = int(data.get('item_id'))
+        remarks = data.get('remarks', '')
+        tithe_kept = data.get('tithe_kept', None)
+        selling_price = data.get('selling_price', None)
+
+        if not SOLD_ITEMS_SHEET_URL:
+            return jsonify({'success': False, 'message': 'Sold items sheet is not configured'}), 400
+
+        df = connector.read_from_sheets(SOLD_ITEMS_SHEET_URL)
+        if df.empty or item_id < 0 or item_id >= len(df):
+            return jsonify({'success': False, 'message': 'Sold item not found'}), 404
+
+        # Keep remarks editable.
+        df.at[item_id, 'remarks'] = remarks
+
+        # Keep tithe_kept editable.
+        if tithe_kept is not None:
+            if isinstance(tithe_kept, str):
+                tithe_kept = tithe_kept.lower() in ['true', '1', 'yes']
+            df.at[item_id, 'tithe_kept'] = 'True' if tithe_kept else 'False'
+
+        # If selling price changes, recompute derived values.
+        if selling_price is not None and str(selling_price) != '':
+            selling_price = float(selling_price)
+            quantity = int(float(df.at[item_id, 'quantity'])) if pd.notna(df.at[item_id, 'quantity']) else 0
+            cost_per_unit = float(df.at[item_id, 'total_cost_per_unit']) if pd.notna(df.at[item_id, 'total_cost_per_unit']) else 0.0
+            total_cost = cost_per_unit * quantity
+            profit = selling_price - total_cost
+            tithe = profit * 0.10
+            profit_after_tithe = profit - tithe
+
+            df.at[item_id, 'selling_price'] = selling_price
+            df.at[item_id, 'total_cost'] = total_cost
+            df.at[item_id, 'profit'] = profit
+            df.at[item_id, 'tithe'] = tithe
+            df.at[item_id, 'profit_after_tithe'] = profit_after_tithe
+
+        connector.write_to_sheets(df, SOLD_ITEMS_SHEET_URL)
+        return jsonify({'success': True, 'message': 'Sold item updated successfully'})
+    except Exception as e:
+        logger.error(f"Error updating sold item: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'message': str(e)}), 400
 
 @app.route('/api/delete_invoice', methods=['POST'])

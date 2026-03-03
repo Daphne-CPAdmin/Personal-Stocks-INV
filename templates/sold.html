@@ -72,8 +72,8 @@
                         <td>{{ item.get('date_sold', '-') }}</td>
                         <td>{{ item.get('remarks', '-') }}</td>
                         <td>
-                            <button class="btn btn-sm btn-primary" onclick="viewInvoice('{{ item.get('product_name', '') }}')">
-                                View Details
+                            <button class="btn btn-sm btn-primary" onclick="openSoldEditModal({{ loop.index0 }}, '{{ item.get('product_name', '')|e }}', '{{ item.get('remarks', '')|e }}', {{ item.get('selling_price', 0) }}, {% if item.get('tithe_kept') == True or item.get('tithe_kept') == 'True' or item.get('tithe_kept') == 'true' %}true{% else %}false{% endif %})">
+                                Edit
                             </button>
                         </td>
                     </tr>
@@ -85,6 +85,38 @@
                 {% endif %}
             </tbody>
         </table>
+    </div>
+</div>
+
+<div id="soldEditModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeSoldEditModal()">&times;</span>
+        <h3>Edit Sold Item</h3>
+        <form id="soldEditForm" onsubmit="updateSoldItem(event)">
+            <input type="hidden" id="soldEditItemId" name="item_id">
+            <div class="form-group">
+                <label>Product</label>
+                <input type="text" id="soldEditProductName" readonly>
+            </div>
+            <div class="form-group">
+                <label>Selling Price (PHP)</label>
+                <input type="number" step="0.01" id="soldEditSellingPrice" name="selling_price" required>
+            </div>
+            <div class="form-group">
+                <label>Remarks</label>
+                <textarea id="soldEditRemarks" name="remarks" rows="3"></textarea>
+            </div>
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="soldEditTitheKept" name="tithe_kept">
+                    <span>Tithe Kept</span>
+                </label>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeSoldEditModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Update Sold Item</button>
+            </div>
+        </form>
     </div>
 </div>
 {% endblock %}
@@ -114,9 +146,52 @@ function updateTitheStatus(itemId, titheKept) {
     });
 }
 
-function viewInvoice(productName) {
-    alert('Product: ' + productName + '\n\nInvoice details feature coming soon!');
+function openSoldEditModal(itemId, productName, remarks, sellingPrice, titheKept) {
+    document.getElementById('soldEditItemId').value = itemId;
+    document.getElementById('soldEditProductName').value = productName || '';
+    document.getElementById('soldEditRemarks').value = remarks || '';
+    document.getElementById('soldEditSellingPrice').value = parseFloat(sellingPrice || 0).toFixed(2);
+    document.getElementById('soldEditTitheKept').checked = !!titheKept;
+    document.getElementById('soldEditModal').style.display = 'block';
 }
+
+function closeSoldEditModal() {
+    document.getElementById('soldEditModal').style.display = 'none';
+}
+
+function updateSoldItem(event) {
+    event.preventDefault();
+    const data = {
+        item_id: parseInt(document.getElementById('soldEditItemId').value, 10),
+        selling_price: parseFloat(document.getElementById('soldEditSellingPrice').value || 0),
+        remarks: document.getElementById('soldEditRemarks').value || '',
+        tithe_kept: document.getElementById('soldEditTitheKept').checked
+    };
+
+    fetch('/api/update_sold_item', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + result.message);
+        }
+    })
+    .catch(error => {
+        alert('Error: ' + error);
+    });
+}
+
+window.addEventListener('click', function(event) {
+    const soldModal = document.getElementById('soldEditModal');
+    if (event.target === soldModal) {
+        closeSoldEditModal();
+    }
+});
 </script>
 {% endblock %}
 
