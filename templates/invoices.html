@@ -5,7 +5,10 @@
 {% block content %}
 <div class="page-header">
     <h2>Invoice Management</h2>
-    <button class="btn btn-primary" onclick="openCreateInvoiceModal()">+ Create Invoice</button>
+    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+        <button class="btn btn-secondary" onclick="rebuildInvoiceSync()">Rebuild Inventory/Sold From Invoices</button>
+        <button class="btn btn-primary" onclick="openCreateInvoiceModal()">+ Create Invoice</button>
+    </div>
 </div>
 <script id="allProductsJson" type="application/json">{% if product_names %}{{ product_names|tojson }}{% else %}[]{% endif %}</script>
 
@@ -2001,6 +2004,33 @@ function deleteInvoice(invoiceNumber, createdAt = '') {
     .then(result => {
         if (result.success) {
             alert('Invoice deleted successfully!');
+            location.reload();
+        } else {
+            alert('Error: ' + result.message);
+        }
+    })
+    .catch(error => {
+        alert('Error: ' + error);
+    });
+}
+
+function rebuildInvoiceSync() {
+    const ok = confirm('This will backtrack inventory and repopulate sold items from current invoices. Continue?');
+    if (!ok) return;
+
+    fetch('/api/rebuild_invoice_sync', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            let msg = result.message || 'Rebuild completed.';
+            const skipped = result.result && Array.isArray(result.result.skipped_rows) ? result.result.skipped_rows : [];
+            if (skipped.length > 0) {
+                msg += `\n\nSkipped rows (${skipped.length}):\n- ${skipped.slice(0, 5).join('\n- ')}`;
+            }
+            alert(msg);
             location.reload();
         } else {
             alert('Error: ' + result.message);

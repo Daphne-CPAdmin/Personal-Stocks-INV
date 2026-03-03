@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from datetime import datetime
 import logging
 import pandas as pd
+import json
 from data_sources import DataConnector
 
 # Load environment variables
@@ -173,6 +174,259 @@ def _normalize_invoice_boolean_columns(df):
             lambda v: 'True' if str(v).strip().lower() in truthy else 'False'
         )
     return df
+
+
+def _invoice_sync_marker(invoice_number, created_at):
+    """Build stable marker prefix used in sold remarks for invoice-linked rows."""
+    return f"INV_SYNC:{str(invoice_number).strip()}|{str(created_at).strip()}|"
+
+
+def _safe_int(value, default=0):
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_float(value, default=0.0):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _ensure_inventory_columns(df):
+    required = ['product_name', 'total_cost_per_unit', 'quantity', 'total_bought_quantity', 'remaining_qty', 'status', 'date_sold']
+    if df is None or df.empty:
+        df = pd.DataFrame(columns=required)
+    for col in required:
+        if col not in df.columns:
+            if col in ['product_name', 'status', 'date_sold']:
+                df[col] = ''
+            else:
+                df[col] = 0
+    return df
+
+
+def _ensure_sold_columns(df):
+    required = ['product_name', 'quantity', 'total_cost_per_unit', 'selling_price', 'total_cost', 'profit', 'tithe', 'profit_after_tithe', 'tithe_kept', 'remarks', 'date_sold']
+    if df is None or df.empty:
+        df = pd.DataFrame(columns=required)
+    for col in required:
+        if col not in df.columns:
+            if col in ['product_name', 'remarks', 'date_sold', 'tithe_kept']:
+                df[col] = ''
+            else:
+                df[col] = 0
+    if 'tithe_kept' in df.columns:
+        df['tithe_kept'] = df['tithe_kept'].astype(str)
+    return df
+
+
+def _rollback_invoice_stock_sync(inventory_df, sold_df, invoice_number, created_at):
+    """Restore inventory and remove sold rows linked to a specific invoice."""
+    marker = _invoice_sync_marker(invoice_number, created_at)
+    if sold_df.empty:
+        return inventory_df, sold_df
+
+    restore_rows = sold_df[sold_df['remarks'].astype(str).str.startswith(marker, na=False)]
+    if restore_rows.empty:
+        return inventory_df, sold_df
+
+    for _, sold_row in restore_rows.iterrows():
+        product_name = str(sold_row.get('product_name', '')).strip()
+        qty = _safe_int(sold_row.get('quantity', 0), 0)
+        if qty <= 0 or not product_name:
+            continue
+        candidate_idx = inventory_df[inventory_df['product_name'].astype(str).str.strip() == product_name].index
+        if len(candidate_idx) == 0:
+            continue
+        # Restore to first matching row to keep stock totals accurate.
+        idx = candidate_idx[0]
+        current_remaining = _safe_int(inventory_df.at[idx, 'remaining_qty'], 0)
+        inventory_df.at[idx, 'remaining_qty'] = current_remaining + qty
+        inventory_df.at[idx, 'quantity'] = inventory_df.at[idx, 'remaining_qty']
+        inventory_df.at[idx, 'status'] = 'in_stock' if _safe_float(inventory_df.at[idx, 'remaining_qty'], 0) > 0 else 'out_of_stock'
+
+    sold_df = sold_df[~sold_df['remarks'].astype(str).str.startswith(marker, na=False)].reset_index(drop=True)
+    return inventory_df, sold_df
+
+
+def _apply_invoice_stock_sync(inventory_df, sold_df, invoice_number, created_at, items, invoice_date):
+    """Consume inventory for invoice items and append corresponding sold rows."""
+    now_ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    sold_rows = []
+
+    # Validate stock availability per product first.
+    required_by_product = {}
+    for item in items:
+        name = str(item.get('name', '')).strip()
+        qty = _safe_int(item.get('quantity', 0), 0)
+        if name and qty > 0:
+            required_by_product[name] = required_by_product.get(name, 0) + qty
+
+    for product_name, needed_qty in required_by_product.items():
+        product_rows = inventory_df[inventory_df['product_name'].astype(str).str.strip() == product_name]
+        available = product_rows['remaining_qty'].apply(lambda v: _safe_int(v, 0)).sum() if not product_rows.empty else 0
+        if available < needed_qty:
+            raise ValueError(f"Insufficient stock for '{product_name}'. Needed {needed_qty}, available {available}.")
+
+    marker = _invoice_sync_marker(invoice_number, created_at)
+    for item in items:
+        product_name = str(item.get('name', '')).strip()
+        qty_to_consume = _safe_int(item.get('quantity', 0), 0)
+        unit_price = _safe_float(item.get('price', 0), 0.0)
+        if not product_name or qty_to_consume <= 0:
+            continue
+
+        candidate_idx = inventory_df[inventory_df['product_name'].astype(str).str.strip() == product_name].index.tolist()
+        for idx in candidate_idx:
+            if qty_to_consume <= 0:
+                break
+            available = _safe_int(inventory_df.at[idx, 'remaining_qty'], 0)
+            if available <= 0:
+                continue
+            consume = min(available, qty_to_consume)
+            inventory_df.at[idx, 'remaining_qty'] = available - consume
+            inventory_df.at[idx, 'quantity'] = inventory_df.at[idx, 'remaining_qty']
+            inventory_df.at[idx, 'status'] = 'in_stock' if _safe_float(inventory_df.at[idx, 'remaining_qty'], 0) > 0 else 'out_of_stock'
+            inventory_df.at[idx, 'date_sold'] = invoice_date or now_ts
+
+            cost_per_unit = _safe_float(inventory_df.at[idx, 'total_cost_per_unit'], 0.0)
+            line_revenue = unit_price * consume
+            total_cost = cost_per_unit * consume
+            profit = line_revenue - total_cost
+            tithe = profit * 0.10
+            sold_rows.append({
+                'product_name': product_name,
+                'quantity': consume,
+                'total_cost_per_unit': cost_per_unit,
+                'selling_price': line_revenue,
+                'total_cost': total_cost,
+                'profit': profit,
+                'tithe': tithe,
+                'profit_after_tithe': profit - tithe,
+                'tithe_kept': 'False',
+                'remarks': f"{marker}line:{product_name}",
+                'date_sold': invoice_date or now_ts
+            })
+            qty_to_consume -= consume
+
+    if sold_rows:
+        sold_df = pd.concat([sold_df, pd.DataFrame(sold_rows)], ignore_index=True)
+    if 'tithe_kept' in sold_df.columns:
+        sold_df['tithe_kept'] = sold_df['tithe_kept'].astype(str)
+    return inventory_df, sold_df
+
+
+def _sync_invoice_with_inventory_and_sold(invoice_number, created_at, items, invoice_date, replace_existing=False, delete_only=False):
+    """Synchronize invoice quantities to inventory and sold sheets."""
+    if not INVENTORY_SHEET_URL or not SOLD_ITEMS_SHEET_URL:
+        return
+
+    inventory_df = _ensure_inventory_columns(connector.read_from_sheets(INVENTORY_SHEET_URL))
+    sold_df = _ensure_sold_columns(connector.read_from_sheets(SOLD_ITEMS_SHEET_URL))
+
+    if replace_existing or delete_only:
+        inventory_df, sold_df = _rollback_invoice_stock_sync(
+            inventory_df=inventory_df,
+            sold_df=sold_df,
+            invoice_number=invoice_number,
+            created_at=created_at
+        )
+
+    if not delete_only:
+        inventory_df, sold_df = _apply_invoice_stock_sync(
+            inventory_df=inventory_df,
+            sold_df=sold_df,
+            invoice_number=invoice_number,
+            created_at=created_at,
+            items=items,
+            invoice_date=invoice_date
+        )
+
+    connector.write_to_sheets(inventory_df, INVENTORY_SHEET_URL)
+    connector.write_to_sheets(sold_df, SOLD_ITEMS_SHEET_URL)
+
+
+def _reset_inventory_from_totals(inventory_df):
+    """Reset inventory remaining/quantity from total bought before replay."""
+    inventory_df = _ensure_inventory_columns(inventory_df)
+    for idx in inventory_df.index:
+        base_qty = _safe_int(
+            inventory_df.at[idx, 'total_bought_quantity']
+            if 'total_bought_quantity' in inventory_df.columns
+            else inventory_df.at[idx, 'quantity'],
+            0
+        )
+        inventory_df.at[idx, 'remaining_qty'] = max(0, base_qty)
+        inventory_df.at[idx, 'quantity'] = max(0, base_qty)
+        inventory_df.at[idx, 'status'] = 'in_stock' if base_qty > 0 else 'out_of_stock'
+        if 'date_sold' in inventory_df.columns:
+            inventory_df.at[idx, 'date_sold'] = ''
+    return inventory_df
+
+
+def _rebuild_invoice_inventory_sold_sync():
+    """Backtrack from current invoices to rebuild inventory and sold sheets."""
+    if not INVENTORY_SHEET_URL or not SOLD_ITEMS_SHEET_URL or not INVOICES_SHEET_URL:
+        raise ValueError("Inventory, Sold Items, and Invoices sheet URLs must be configured.")
+
+    inventory_df = _reset_inventory_from_totals(connector.read_from_sheets(INVENTORY_SHEET_URL))
+    sold_df = _ensure_sold_columns(connector.read_from_sheets(SOLD_ITEMS_SHEET_URL))
+    invoice_df = connector.read_from_sheets(INVOICES_SHEET_URL)
+
+    # Keep non-invoice-linked sold rows; rebuild invoice-linked rows from scratch.
+    sold_df = sold_df[~sold_df['remarks'].astype(str).str.startswith('INV_SYNC:', na=False)].reset_index(drop=True)
+
+    replayed_rows = 0
+    skipped_rows = []
+    if invoice_df is not None and not invoice_df.empty:
+        replay_df = invoice_df.copy()
+        replay_df['_sort_dt'] = pd.to_datetime(
+            replay_df.get('created_at', replay_df.get('invoice_date', '')),
+            errors='coerce'
+        )
+        replay_df = replay_df.sort_values('_sort_dt', na_position='last')
+
+        for _, row in replay_df.iterrows():
+            product_name = str(row.get('product_name', '')).strip()
+            quantity = _safe_int(row.get('quantity', 0), 0)
+            price_sold = _safe_float(row.get('price_sold', 0), 0.0)
+            invoice_number = str(row.get('invoice_number', '')).strip()
+            created_at = str(row.get('created_at', '')).strip()
+            invoice_date = str(row.get('invoice_date', '')).strip()
+
+            if not product_name or quantity <= 0 or not invoice_number:
+                continue
+
+            try:
+                inventory_df, sold_df = _apply_invoice_stock_sync(
+                    inventory_df=inventory_df,
+                    sold_df=sold_df,
+                    invoice_number=invoice_number,
+                    created_at=created_at,
+                    items=[{
+                        'name': product_name,
+                        'quantity': quantity,
+                        'price': price_sold
+                    }],
+                    invoice_date=invoice_date
+                )
+                replayed_rows += 1
+            except Exception as e:
+                skipped_rows.append(
+                    f"{invoice_number} / {product_name} / qty {quantity}: {str(e)}"
+                )
+
+    connector.write_to_sheets(inventory_df, INVENTORY_SHEET_URL)
+    connector.write_to_sheets(sold_df, SOLD_ITEMS_SHEET_URL)
+    return {
+        'replayed_rows': replayed_rows,
+        'skipped_rows': skipped_rows,
+        'sold_rows_total': len(sold_df),
+        'inventory_rows_total': len(inventory_df)
+    }
 
 # Google Sheets URLs from environment
 INVENTORY_SHEET_URL = os.getenv('INVENTORY_SHEET_URL')
@@ -1037,6 +1291,23 @@ def create_invoice():
             # Reflect generated invoice number into rows before concat.
             for row in invoice_rows:
                 row['invoice_number'] = invoice_number
+
+            # Sync inventory + sold items from invoice lines before persisting invoice rows.
+            sync_items = []
+            for item in items:
+                name = str(item.get('name', '')).strip()
+                price = _safe_float(item.get('price', 0), 0.0)
+                quantity = _safe_int(item.get('quantity', 0), 0)
+                if name and quantity > 0:
+                    sync_items.append({'name': name, 'price': price, 'quantity': quantity})
+            _sync_invoice_with_inventory_and_sold(
+                invoice_number=invoice_number,
+                created_at=created_at,
+                items=sync_items,
+                invoice_date=invoice_date,
+                replace_existing=False,
+                delete_only=False
+            )
             # Handle empty DataFrame
             if df.empty:
                 df = pd.DataFrame(columns=INVOICE_REQUIRED_COLUMNS)
@@ -1272,6 +1543,16 @@ def update_invoice():
             for i in normalized_items
         )
 
+        # Sync inventory + sold sheets for this invoice edit by rollback + reapply.
+        _sync_invoice_with_inventory_and_sold(
+            invoice_number=invoice_number,
+            created_at=created_at,
+            items=normalized_items,
+            invoice_date=invoice_date,
+            replace_existing=True,
+            delete_only=False
+        )
+
         rebuilt_rows = []
         for item in normalized_items:
             rebuilt_rows.append({
@@ -1480,6 +1761,19 @@ def delete_invoice():
                         'success': False,
                         'message': 'This invoice number matches multiple invoices. Please refresh and delete the exact invoice entry again.'
                     }), 409
+                # Use the matched invoice's created_at for precise stock rollback.
+                if not candidate_rows.empty and 'created_at' in candidate_rows.columns:
+                    created_at = str(candidate_rows.iloc[0].get('created_at', '')).strip()
+
+            # Roll back inventory and sold rows linked to this invoice.
+            _sync_invoice_with_inventory_and_sold(
+                invoice_number=invoice_number,
+                created_at=created_at,
+                items=[],
+                invoice_date='',
+                replace_existing=False,
+                delete_only=True
+            )
 
             df = df[~delete_mask]
             
@@ -1496,6 +1790,24 @@ def delete_invoice():
         if "Google Sheets client not initialized" in str(e):
             user_message = "Unable to connect to Google Sheets. Please check your credentials."
         return jsonify({'success': False, 'message': user_message}), 400
+
+
+@app.route('/api/rebuild_invoice_sync', methods=['POST'])
+def rebuild_invoice_sync():
+    """Rebuild inventory/sold data from current invoice rows."""
+    try:
+        result = _rebuild_invoice_inventory_sold_sync()
+        message = f"Rebuild completed. Replayed {result['replayed_rows']} invoice rows."
+        if result['skipped_rows']:
+            message += f" Skipped {len(result['skipped_rows'])} rows due to stock mismatch."
+        return jsonify({
+            'success': True,
+            'message': message,
+            'result': result
+        })
+    except Exception as e:
+        logger.error(f"Error rebuilding invoice sync: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 400
 
 if __name__ == '__main__':
     # Create necessary directories
