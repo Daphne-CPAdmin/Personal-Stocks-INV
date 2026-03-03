@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 INVOICE_REQUIRED_COLUMNS = [
     'invoice_number', 'customer_name', 'products_summary', 'product_name', 'price_sold',
     'quantity', 'line_total', 'shipment_fee', 'total_amount', 'invoice_date', 'created_at',
-    'fulfilled', 'paid', 'amount_paid', 'payment_reference'
+    'fulfilled', 'paid', 'amount_paid', 'payment_reference', 'payment_history'
 ]
 
 def format_date_custom(date_str):
@@ -124,6 +124,42 @@ def _to_float(value, default=0.0):
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def _parse_payment_history(value):
+    """Parse payment history JSON safely and normalize entry fields."""
+    import ast
+    import json
+
+    history = []
+    if isinstance(value, list):
+        history = value
+    elif isinstance(value, str) and value.strip():
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                history = parsed
+        except (ValueError, TypeError):
+            try:
+                parsed = ast.literal_eval(value)
+                if isinstance(parsed, list):
+                    history = parsed
+            except (ValueError, SyntaxError, TypeError):
+                history = []
+
+    normalized = []
+    for item in history:
+        if not isinstance(item, dict):
+            continue
+        amount = _to_float(item.get('amount', 0))
+        if amount <= 0:
+            continue
+        normalized.append({
+            'amount': amount,
+            'reference': str(item.get('reference', '') or '').strip(),
+            'timestamp': str(item.get('timestamp', '') or '').strip()
+        })
+    return normalized
 
 # Google Sheets URLs from environment
 INVENTORY_SHEET_URL = os.getenv('INVENTORY_SHEET_URL')
@@ -798,6 +834,7 @@ def invoices():
                             'fulfilled': bool(fulfilled_val),
                             'amount_paid': _to_float(row.get('amount_paid', 0)),
                             'payment_reference': str(row.get('payment_reference', '') or '').strip(),
+                            'payment_history': _parse_payment_history(row.get('payment_history', '[]')),
                             'items_parsed': []
                         }
                     # Collect items for modal view
@@ -904,6 +941,7 @@ def not_found(error):
 def create_invoice():
     """Create a new invoice"""
     try:
+        import json
         data = request.json
         customer_name = data.get('customer_name')
         items = data.get('items', [])
@@ -914,6 +952,13 @@ def create_invoice():
         invoice_date = data.get('invoice_date', datetime.now().strftime('%Y-%m-%d'))
         amount_paid = max(0.0, min(amount_paid, total_amount))
         is_paid = amount_paid >= total_amount and total_amount > 0
+        initial_payment_history = []
+        if amount_paid > 0:
+            initial_payment_history.append({
+                'amount': amount_paid,
+                'reference': payment_reference,
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            })
         
         invoice_number = f"INV-{datetime.now().strftime('%Y%m%d')}-{datetime.now().strftime('%H%M%S')}"
         created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -946,7 +991,8 @@ def create_invoice():
                 'paid': is_paid,
                 'fulfilled': False,
                 'amount_paid': amount_paid,
-                'payment_reference': payment_reference
+                'payment_reference': payment_reference,
+                'payment_history': json.dumps(initial_payment_history)
             }
             invoice_rows.append(invoice_row)
         
@@ -967,7 +1013,8 @@ def create_invoice():
                 'paid': is_paid,
                 'fulfilled': False,
                 'amount_paid': amount_paid,
-                'payment_reference': payment_reference
+                'payment_reference': payment_reference,
+                'payment_history': json.dumps(initial_payment_history)
             }
             invoice_rows.append(invoice_row)
         
@@ -1117,6 +1164,7 @@ def update_invoice_status():
 def update_invoice():
     """Update an existing invoice and its line items."""
     try:
+        import json
         data = request.json or {}
         invoice_number = data.get('invoice_number')
         created_at = data.get('created_at')
@@ -1183,6 +1231,7 @@ def update_invoice():
         fulfilled = first_row.get('fulfilled', False)
         existing_amount_paid = _to_float(first_row.get('amount_paid', 0))
         existing_payment_reference = str(first_row.get('payment_reference', '') or '').strip()
+        existing_payment_history = _parse_payment_history(first_row.get('payment_history', '[]'))
 
         if isinstance(paid, str):
             paid = paid.lower() in ['true', '1', 'yes']
@@ -1197,6 +1246,12 @@ def update_invoice():
         amount_paid = max(0.0, min(amount_paid, total_amount))
         payment_reference = existing_payment_reference if payload_payment_reference is None else str(payload_payment_reference or '').strip()
         paid = bool(paid) or (amount_paid >= total_amount and total_amount > 0)
+        if not existing_payment_history and amount_paid > 0:
+            existing_payment_history.append({
+                'amount': amount_paid,
+                'reference': payment_reference,
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            })
         products_summary = "; ".join(
             f"{i['name']} ({i['quantity']} pcs x PHP {i['price']:.2f}) = PHP {i['subtotal']:.2f}"
             for i in normalized_items
@@ -1219,7 +1274,8 @@ def update_invoice():
                 'paid': bool(paid),
                 'fulfilled': bool(fulfilled),
                 'amount_paid': amount_paid,
-                'payment_reference': payment_reference
+                'payment_reference': payment_reference,
+                'payment_history': json.dumps(existing_payment_history)
             })
 
         remaining_df = df[~existing_mask]
@@ -1252,6 +1308,7 @@ def update_invoice():
 def add_invoice_payment():
     """Add payment to an invoice and update its outstanding balance."""
     try:
+        import json
         data = request.json or {}
         invoice_number = data.get('invoice_number')
         created_at = data.get('created_at')
@@ -1286,17 +1343,26 @@ def add_invoice_payment():
             df['amount_paid'] = 0.0
         if 'payment_reference' not in df.columns:
             df['payment_reference'] = ''
+        if 'payment_history' not in df.columns:
+            df['payment_history'] = '[]'
 
         first_row = df[mask].iloc[0]
         total_amount = _to_float(first_row.get('total_amount', 0))
         current_paid = _to_float(first_row.get('amount_paid', 0))
+        payment_history = _parse_payment_history(first_row.get('payment_history', '[]'))
         updated_paid = min(total_amount, max(0.0, current_paid + payment_amount))
         balance_due = max(0.0, total_amount - updated_paid)
         is_paid = balance_due <= 0
+        payment_history.append({
+            'amount': payment_amount,
+            'reference': payment_reference,
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        })
 
         df.loc[mask, 'amount_paid'] = updated_paid
         if payment_reference:
             df.loc[mask, 'payment_reference'] = payment_reference
+        df.loc[mask, 'payment_history'] = json.dumps(payment_history)
         df.loc[mask, 'paid'] = bool(is_paid)
 
         for col in INVOICE_REQUIRED_COLUMNS:
@@ -1312,7 +1378,8 @@ def add_invoice_payment():
             'message': 'Payment recorded successfully',
             'amount_paid': updated_paid,
             'balance_due': balance_due,
-            'paid': bool(is_paid)
+            'paid': bool(is_paid),
+            'payment_history': payment_history
         })
     except Exception as e:
         logger.error(f"Error adding invoice payment: {str(e)}", exc_info=True)
