@@ -26,6 +26,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+INVOICE_REQUIRED_COLUMNS = [
+    'invoice_number', 'customer_name', 'products_summary', 'product_name', 'price_sold',
+    'quantity', 'line_total', 'shipment_fee', 'total_amount', 'invoice_date', 'created_at',
+    'fulfilled', 'paid', 'amount_paid', 'payment_reference'
+]
+
 def format_date_custom(date_str):
     """Format date string to 'Jan162026 9:30PM' format"""
     if not date_str or pd.isna(date_str):
@@ -110,6 +116,14 @@ def _count_invoice_instances(df_subset):
         return 0
     sig = df_subset[available].fillna('').astype(str).agg('|'.join, axis=1)
     return sig.nunique()
+
+
+def _to_float(value, default=0.0):
+    """Convert mixed values to float safely."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 # Google Sheets URLs from environment
 INVENTORY_SHEET_URL = os.getenv('INVENTORY_SHEET_URL')
@@ -782,6 +796,8 @@ def invoices():
                             'created_at': row.get('created_at', ''),
                             'paid': bool(paid_val),
                             'fulfilled': bool(fulfilled_val),
+                            'amount_paid': _to_float(row.get('amount_paid', 0)),
+                            'payment_reference': str(row.get('payment_reference', '') or '').strip(),
                             'items_parsed': []
                         }
                     # Collect items for modal view
@@ -893,7 +909,11 @@ def create_invoice():
         items = data.get('items', [])
         shipment_fee = float(data.get('shipment_fee', 0))
         total_amount = float(data.get('total_amount', 0))
+        amount_paid = _to_float(data.get('amount_paid', 0))
+        payment_reference = str(data.get('payment_reference', '') or '').strip()
         invoice_date = data.get('invoice_date', datetime.now().strftime('%Y-%m-%d'))
+        amount_paid = max(0.0, min(amount_paid, total_amount))
+        is_paid = amount_paid >= total_amount and total_amount > 0
         
         invoice_number = f"INV-{datetime.now().strftime('%Y%m%d')}-{datetime.now().strftime('%H%M%S')}"
         created_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -923,8 +943,10 @@ def create_invoice():
                 'total_amount': total_amount,
                 'invoice_date': invoice_date,
                 'created_at': created_at,
-                'paid': False,
-                'fulfilled': False
+                'paid': is_paid,
+                'fulfilled': False,
+                'amount_paid': amount_paid,
+                'payment_reference': payment_reference
             }
             invoice_rows.append(invoice_row)
         
@@ -942,8 +964,10 @@ def create_invoice():
                 'total_amount': total_amount,
                 'invoice_date': invoice_date,
                 'created_at': created_at,
-                'paid': False,
-                'fulfilled': False
+                'paid': is_paid,
+                'fulfilled': False,
+                'amount_paid': amount_paid,
+                'payment_reference': payment_reference
             }
             invoice_rows.append(invoice_row)
         
@@ -955,13 +979,15 @@ def create_invoice():
                 row['invoice_number'] = invoice_number
             # Handle empty DataFrame
             if df.empty:
-                df = pd.DataFrame(columns=['invoice_number', 'customer_name', 'products_summary', 'product_name', 'price_sold', 'quantity', 'line_total', 'shipment_fee', 'total_amount', 'invoice_date', 'created_at', 'fulfilled', 'paid'])
+                df = pd.DataFrame(columns=INVOICE_REQUIRED_COLUMNS)
 
             # Keep exact invoices sheet schema/order requested by user.
-            required_columns = ['invoice_number', 'customer_name', 'products_summary', 'product_name', 'price_sold', 'quantity', 'line_total', 'shipment_fee', 'total_amount', 'invoice_date', 'created_at', 'fulfilled', 'paid']
+            required_columns = INVOICE_REQUIRED_COLUMNS
             for col in required_columns:
-                if col not in df.columns:
+                if col not in df.columns and col in ['fulfilled', 'paid']:
                     df[col] = False if col in ['fulfilled', 'paid'] else ''
+                elif col not in df.columns:
+                    df[col] = ''
             df = df[required_columns]
             # Ensure paid and fulfilled columns exist
             if 'paid' not in df.columns:
@@ -1097,6 +1123,8 @@ def update_invoice():
         customer_name = (data.get('customer_name') or '').strip()
         invoice_date = (data.get('invoice_date') or '').strip()
         shipment_fee = float(data.get('shipment_fee', 0) or 0)
+        payload_amount_paid = data.get('amount_paid')
+        payload_payment_reference = data.get('payment_reference')
         items = data.get('items', [])
 
         if not invoice_number:
@@ -1153,6 +1181,8 @@ def update_invoice():
         created_at = first_row.get('created_at', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
         paid = first_row.get('paid', False)
         fulfilled = first_row.get('fulfilled', False)
+        existing_amount_paid = _to_float(first_row.get('amount_paid', 0))
+        existing_payment_reference = str(first_row.get('payment_reference', '') or '').strip()
 
         if isinstance(paid, str):
             paid = paid.lower() in ['true', '1', 'yes']
@@ -1160,6 +1190,13 @@ def update_invoice():
             fulfilled = fulfilled.lower() in ['true', '1', 'yes']
 
         total_amount = subtotal + shipment_fee
+        if payload_amount_paid is None:
+            amount_paid = existing_amount_paid
+        else:
+            amount_paid = _to_float(payload_amount_paid, existing_amount_paid)
+        amount_paid = max(0.0, min(amount_paid, total_amount))
+        payment_reference = existing_payment_reference if payload_payment_reference is None else str(payload_payment_reference or '').strip()
+        paid = bool(paid) or (amount_paid >= total_amount and total_amount > 0)
         products_summary = "; ".join(
             f"{i['name']} ({i['quantity']} pcs x PHP {i['price']:.2f}) = PHP {i['subtotal']:.2f}"
             for i in normalized_items
@@ -1180,16 +1217,20 @@ def update_invoice():
                 'invoice_date': invoice_date,
                 'created_at': created_at,
                 'paid': bool(paid),
-                'fulfilled': bool(fulfilled)
+                'fulfilled': bool(fulfilled),
+                'amount_paid': amount_paid,
+                'payment_reference': payment_reference
             })
 
         remaining_df = df[~existing_mask]
         updated_df = pd.concat([remaining_df, pd.DataFrame(rebuilt_rows)], ignore_index=True)
         # Keep exact invoices sheet schema/order requested by user.
-        required_columns = ['invoice_number', 'customer_name', 'products_summary', 'product_name', 'price_sold', 'quantity', 'line_total', 'shipment_fee', 'total_amount', 'invoice_date', 'created_at', 'fulfilled', 'paid']
+        required_columns = INVOICE_REQUIRED_COLUMNS
         for col in required_columns:
-            if col not in updated_df.columns:
+            if col not in updated_df.columns and col in ['fulfilled', 'paid']:
                 updated_df[col] = False if col in ['fulfilled', 'paid'] else ''
+            elif col not in updated_df.columns:
+                updated_df[col] = ''
         updated_df = updated_df[required_columns]
         connector.write_to_sheets(updated_df, INVOICES_SHEET_URL)
 
@@ -1198,10 +1239,83 @@ def update_invoice():
             'message': 'Invoice updated successfully',
             'invoice_number': invoice_number,
             'subtotal': subtotal,
-            'total_amount': total_amount
+            'total_amount': total_amount,
+            'amount_paid': amount_paid,
+            'balance_due': max(0.0, total_amount - amount_paid)
         })
     except Exception as e:
         logger.error(f"Error updating invoice: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 400
+
+
+@app.route('/api/add_invoice_payment', methods=['POST'])
+def add_invoice_payment():
+    """Add payment to an invoice and update its outstanding balance."""
+    try:
+        data = request.json or {}
+        invoice_number = data.get('invoice_number')
+        created_at = data.get('created_at')
+        payment_amount = _to_float(data.get('payment_amount', 0))
+        payment_reference = str(data.get('payment_reference', '') or '').strip()
+
+        if not invoice_number:
+            return jsonify({'success': False, 'message': 'Invoice reference is required'}), 400
+        if payment_amount <= 0:
+            return jsonify({'success': False, 'message': 'Payment amount must be greater than zero'}), 400
+        if not INVOICES_SHEET_URL:
+            return jsonify({'success': False, 'message': 'Invoice sheet is not configured'}), 400
+
+        df = connector.read_from_sheets(INVOICES_SHEET_URL)
+        if df.empty:
+            return jsonify({'success': False, 'message': 'Invoice not found'}), 404
+
+        mask = _build_invoice_mask(df, invoice_number=invoice_number, created_at=created_at)
+        if not mask.any():
+            return jsonify({'success': False, 'message': 'Invoice not found'}), 404
+
+        # Safety guard: prevent cross-invoice updates for duplicate invoice numbers.
+        if not created_at:
+            candidate_rows = df[df['invoice_number'].astype(str).str.strip() == str(invoice_number).strip()]
+            if _count_invoice_instances(candidate_rows) > 1:
+                return jsonify({
+                    'success': False,
+                    'message': 'This invoice number matches multiple invoices. Please refresh and retry from the latest list.'
+                }), 409
+
+        if 'amount_paid' not in df.columns:
+            df['amount_paid'] = 0.0
+        if 'payment_reference' not in df.columns:
+            df['payment_reference'] = ''
+
+        first_row = df[mask].iloc[0]
+        total_amount = _to_float(first_row.get('total_amount', 0))
+        current_paid = _to_float(first_row.get('amount_paid', 0))
+        updated_paid = min(total_amount, max(0.0, current_paid + payment_amount))
+        balance_due = max(0.0, total_amount - updated_paid)
+        is_paid = balance_due <= 0
+
+        df.loc[mask, 'amount_paid'] = updated_paid
+        if payment_reference:
+            df.loc[mask, 'payment_reference'] = payment_reference
+        df.loc[mask, 'paid'] = bool(is_paid)
+
+        for col in INVOICE_REQUIRED_COLUMNS:
+            if col not in df.columns and col in ['fulfilled', 'paid']:
+                df[col] = False
+            elif col not in df.columns:
+                df[col] = ''
+        df = df[INVOICE_REQUIRED_COLUMNS]
+
+        connector.write_to_sheets(df, INVOICES_SHEET_URL)
+        return jsonify({
+            'success': True,
+            'message': 'Payment recorded successfully',
+            'amount_paid': updated_paid,
+            'balance_due': balance_due,
+            'paid': bool(is_paid)
+        })
+    except Exception as e:
+        logger.error(f"Error adding invoice payment: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'message': str(e)}), 400
 
 @app.route('/api/update_sold_item', methods=['POST'])

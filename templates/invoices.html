@@ -73,6 +73,8 @@
                                                 data-created-at="{{ invoice.get('created_at', '')|e }}"
                                                 data-total-amount="{{ invoice.get('total_amount', 0) }}"
                                                 data-shipment-fee="{{ shipment_fee }}"
+                                                data-amount-paid="{{ invoice.get('amount_paid', 0) }}"
+                                                data-payment-reference="{{ invoice.get('payment_reference', '')|e }}"
                                                 data-paid="{{ invoice.get('paid', False)|tojson }}"
                                                 data-fulfilled="{{ invoice.get('fulfilled', False)|tojson }}">
                                             View
@@ -83,7 +85,9 @@
                                                 data-customer-name="{{ invoice.get('customer_name', '')|e }}"
                                                 data-invoice-date="{{ invoice.get('invoice_date', '')|e }}"
                                                 data-created-at="{{ invoice.get('created_at', '')|e }}"
-                                                data-shipment-fee="{{ shipment_fee }}">
+                                                data-shipment-fee="{{ shipment_fee }}"
+                                                data-amount-paid="{{ invoice.get('amount_paid', 0) }}"
+                                                data-payment-reference="{{ invoice.get('payment_reference', '')|e }}">
                                             Edit
                                         </button>
                                         <button class="btn btn-sm btn-danger delete-invoice-btn"
@@ -114,6 +118,8 @@
                                                 data-created-at="{{ invoice.get('created_at', '')|e }}"
                                                 data-total-amount="{{ invoice.get('total_amount', 0) }}"
                                                 data-shipment-fee="{{ shipment_fee }}"
+                                                data-amount-paid="{{ invoice.get('amount_paid', 0) }}"
+                                                data-payment-reference="{{ invoice.get('payment_reference', '')|e }}"
                                                 data-paid="{{ invoice.get('paid', False)|tojson }}"
                                                 data-fulfilled="{{ invoice.get('fulfilled', False)|tojson }}">
                                             View
@@ -124,7 +130,9 @@
                                                 data-customer-name="{{ invoice.get('customer_name', '')|e }}"
                                                 data-invoice-date="{{ invoice.get('invoice_date', '')|e }}"
                                                 data-created-at="{{ invoice.get('created_at', '')|e }}"
-                                                data-shipment-fee="{{ shipment_fee }}">
+                                                data-shipment-fee="{{ shipment_fee }}"
+                                                data-amount-paid="{{ invoice.get('amount_paid', 0) }}"
+                                                data-payment-reference="{{ invoice.get('payment_reference', '')|e }}">
                                             Edit
                                         </button>
                                         <button class="btn btn-sm btn-danger delete-invoice-btn"
@@ -244,6 +252,14 @@
                 <input type="number" step="0.01" name="shipment_fee" id="shipmentFee" value="0" placeholder="0.00" oninput="updateInvoiceTotal()" style="max-width: 200px;">
                 <small style="display: block; color: #666; margin-top: 0.25rem;">Optional shipping or delivery fee</small>
             </div>
+            <div class="form-group" style="margin-top: 1rem;">
+                <label>Partial Payment (₱)</label>
+                <input type="number" step="0.01" name="amount_paid" id="partialPaymentAmount" value="0" placeholder="0.00" oninput="updateInvoiceTotal()" style="max-width: 220px;">
+            </div>
+            <div class="form-group" style="margin-top: 0.75rem;">
+                <label>Payment Reference (Optional)</label>
+                <input type="text" name="payment_reference" id="paymentReference" placeholder="GCash / Bank Ref #" style="max-width: 320px;">
+            </div>
             
             <div class="invoice-total">
                 <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
@@ -254,9 +270,17 @@
                     <span>Shipment/Delivery Fee:</span>
                     <span>₱<span id="shipmentFeeDisplay">0.00</span></span>
                 </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span>Partial Payment:</span>
+                    <span>₱<span id="partialPaymentDisplay">0.00</span></span>
+                </div>
                 <div style="display: flex; justify-content: space-between; padding-top: 0.5rem; border-top: 2px solid #6366f1; margin-top: 0.5rem;">
                     <strong>Total:</strong>
                     <strong>₱<span id="invoiceTotal">0.00</span></strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-top: 0.5rem;">
+                    <strong>Balance Due:</strong>
+                    <strong>₱<span id="invoiceBalanceDue">0.00</span></strong>
                 </div>
             </div>
             
@@ -293,6 +317,14 @@
                 <label>Shipment/Delivery Fee (₱)</label>
                 <input type="number" step="0.01" id="editShipmentFee" name="shipment_fee" value="0" oninput="updateEditInvoiceTotal()">
             </div>
+            <div class="form-group" style="margin-top: 0.75rem;">
+                <label>Amount Paid (₱)</label>
+                <input type="number" step="0.01" id="editAmountPaid" name="amount_paid" value="0" oninput="updateEditInvoiceTotal()">
+            </div>
+            <div class="form-group" style="margin-top: 0.75rem;">
+                <label>Payment Reference (Optional)</label>
+                <input type="text" id="editPaymentReference" name="payment_reference" placeholder="GCash / Bank Ref #">
+            </div>
             <div class="invoice-total">
                 <div style="display:flex;justify-content:space-between;margin-bottom:.4rem;">
                     <span>Subtotal:</span><span>₱<span id="editInvoiceSubtotal">0.00</span></span>
@@ -300,8 +332,14 @@
                 <div style="display:flex;justify-content:space-between;margin-bottom:.4rem;">
                     <span>Shipment:</span><span>₱<span id="editShipmentDisplay">0.00</span></span>
                 </div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:.4rem;">
+                    <span>Amount Paid:</span><span>₱<span id="editAmountPaidDisplay">0.00</span></span>
+                </div>
                 <div style="display:flex;justify-content:space-between;border-top:2px solid #7c3aed;padding-top:.4rem;">
                     <strong>Total:</strong><strong>₱<span id="editInvoiceTotal">0.00</span></strong>
+                </div>
+                <div style="display:flex;justify-content:space-between;margin-top:.4rem;">
+                    <strong>Balance Due:</strong><strong>₱<span id="editInvoiceBalance">0.00</span></strong>
                 </div>
             </div>
             <div class="form-actions">
@@ -353,6 +391,20 @@
                 <span class="invoice-totals-label-compact">Total:</span>
                 <span class="invoice-totals-value-compact" id="viewTotalAmount">₱0.00</span>
             </div>
+            <div class="invoice-totals-row-compact">
+                <span class="invoice-totals-label-compact">Amount Paid:</span>
+                <span class="invoice-totals-value-compact" id="viewAmountPaid">₱0.00</span>
+            </div>
+            <div class="invoice-totals-row-compact invoice-totals-final-compact">
+                <span class="invoice-totals-label-compact">Balance Due:</span>
+                <span class="invoice-totals-value-compact" id="viewBalanceDue">₱0.00</span>
+            </div>
+            <div class="invoice-totals-row-compact" style="display:block;text-align:left;">
+                <label for="viewPaymentAmount" style="display:block;margin-bottom:0.25rem;">Add Partial Payment (₱)</label>
+                <input id="viewPaymentAmount" type="number" step="0.01" min="0" placeholder="0.00" style="width:100%;margin-bottom:0.5rem;">
+                <label for="viewPaymentReference" style="display:block;margin-bottom:0.25rem;">Reference # (Optional)</label>
+                <input id="viewPaymentReference" type="text" placeholder="GCash / Bank Ref #" style="width:100%;">
+            </div>
         </div>
         
         <div class="invoice-status-badges" id="invoiceStatusBadges">
@@ -361,6 +413,7 @@
         </div>
         
         <div class="invoice-view-actions-compact">
+            <button class="btn btn-primary btn-sm" id="savePaymentBtn" onclick="addInvoicePayment()">Save Payment</button>
             <button class="btn btn-success btn-sm" id="markPaidBtn" onclick="markInvoicePaid()">Mark as Paid</button>
             <button class="btn btn-info btn-sm" id="markFulfilledBtn" onclick="markInvoiceFulfilled()">Mark as Fulfilled</button>
             <button class="btn btn-secondary btn-sm" onclick="downloadInvoice()">Download</button>
@@ -1111,11 +1164,20 @@ function updateInvoiceTotal() {
     });
     
     const shipmentFee = parseFloat(document.getElementById('shipmentFee').value) || 0;
+    const partialPaymentInput = document.getElementById('partialPaymentAmount');
+    let partialPayment = parseFloat(partialPaymentInput?.value || 0) || 0;
     const total = subtotal + shipmentFee;
+    partialPayment = Math.min(Math.max(partialPayment, 0), total);
+    if (partialPaymentInput) {
+        partialPaymentInput.value = partialPayment.toFixed(2);
+    }
+    const balanceDue = Math.max(0, total - partialPayment);
     
     document.getElementById('invoiceSubtotal').textContent = subtotal.toFixed(2);
     document.getElementById('shipmentFeeDisplay').textContent = shipmentFee.toFixed(2);
+    document.getElementById('partialPaymentDisplay').textContent = partialPayment.toFixed(2);
     document.getElementById('invoiceTotal').textContent = total.toFixed(2);
+    document.getElementById('invoiceBalanceDue').textContent = balanceDue.toFixed(2);
 }
 
 function createInvoice(event) {
@@ -1150,6 +1212,8 @@ function createInvoice(event) {
     const shipmentFee = parseFloat(document.getElementById('shipmentFee').value) || 0;
     const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
     const totalAmount = subtotal + shipmentFee;
+    const amountPaid = Math.min(Math.max(parseFloat(document.getElementById('partialPaymentAmount')?.value || 0) || 0, 0), totalAmount);
+    const paymentReference = (document.getElementById('paymentReference')?.value || '').trim();
     
     fetch('/api/create_invoice', {
         method: 'POST',
@@ -1160,7 +1224,9 @@ function createInvoice(event) {
             subtotal: subtotal,
             shipment_fee: shipmentFee,
             total_amount: totalAmount,
-            invoice_date: invoiceDate
+            invoice_date: invoiceDate,
+            amount_paid: amountPaid,
+            payment_reference: paymentReference
         })
     })
     .then(response => response.json())
@@ -1225,6 +1291,8 @@ function openEditInvoiceModal(data) {
     document.getElementById('editCustomerName').value = data.customerName || '';
     document.getElementById('editInvoiceDate').value = data.invoiceDate || '';
     document.getElementById('editShipmentFee').value = (parseFloat(data.shipmentFee || 0)).toFixed(2);
+    document.getElementById('editAmountPaid').value = (parseFloat(data.amountPaid || 0)).toFixed(2);
+    document.getElementById('editPaymentReference').value = data.paymentReference || '';
     const itemsContainer = document.getElementById('editInvoiceItems');
     itemsContainer.innerHTML = '';
     const items = Array.isArray(data.items) ? data.items : [];
@@ -1251,9 +1319,18 @@ function updateEditInvoiceTotal() {
     });
     const shipment = parseFloat(document.getElementById('editShipmentFee')?.value || 0);
     const total = subtotal + shipment;
+    const amountPaidInput = document.getElementById('editAmountPaid');
+    let amountPaid = parseFloat(amountPaidInput?.value || 0) || 0;
+    amountPaid = Math.min(Math.max(amountPaid, 0), total);
+    if (amountPaidInput) {
+        amountPaidInput.value = amountPaid.toFixed(2);
+    }
+    const balanceDue = Math.max(0, total - amountPaid);
     document.getElementById('editInvoiceSubtotal').textContent = subtotal.toFixed(2);
     document.getElementById('editShipmentDisplay').textContent = shipment.toFixed(2);
+    document.getElementById('editAmountPaidDisplay').textContent = amountPaid.toFixed(2);
     document.getElementById('editInvoiceTotal').textContent = total.toFixed(2);
+    document.getElementById('editInvoiceBalance').textContent = balanceDue.toFixed(2);
 }
 
 function updateInvoice(event) {
@@ -1263,6 +1340,8 @@ function updateInvoice(event) {
     const customerName = document.getElementById('editCustomerName').value.trim();
     const invoiceDate = document.getElementById('editInvoiceDate').value;
     const shipmentFee = parseFloat(document.getElementById('editShipmentFee').value || 0);
+    const amountPaid = parseFloat(document.getElementById('editAmountPaid').value || 0);
+    const paymentReference = (document.getElementById('editPaymentReference').value || '').trim();
     const rows = document.querySelectorAll('#editInvoiceItems .edit-invoice-item');
 
     const items = [];
@@ -1291,6 +1370,8 @@ function updateInvoice(event) {
             customer_name: customerName,
             invoice_date: invoiceDate,
             shipment_fee: shipmentFee,
+            amount_paid: amountPaid,
+            payment_reference: paymentReference,
             items: items
         })
     })
@@ -1307,7 +1388,7 @@ function updateInvoice(event) {
     });
 }
 
-function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmount, shipmentFee, isPaid, isFulfilled, createdAt) {
+function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmount, shipmentFee, amountPaid, paymentReference, isPaid, isFulfilled, createdAt) {
     // Handle optional parameters with defaults
     if (typeof isPaid === 'undefined') isPaid = false;
     if (typeof isFulfilled === 'undefined') isFulfilled = false;
@@ -1408,6 +1489,12 @@ function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmoun
     document.getElementById('viewSubtotal').textContent = `₱${subtotal.toFixed(2)}`;
     document.getElementById('viewShipmentFee').textContent = `₱${parseFloat(shipmentFee).toFixed(2)}`;
     document.getElementById('viewTotalAmount').textContent = `₱${parseFloat(totalAmount).toFixed(2)}`;
+    const normalizedAmountPaid = Math.min(Math.max(parseFloat(amountPaid || 0), 0), parseFloat(totalAmount || 0));
+    const balanceDue = Math.max(0, parseFloat(totalAmount || 0) - normalizedAmountPaid);
+    document.getElementById('viewAmountPaid').textContent = `₱${normalizedAmountPaid.toFixed(2)}`;
+    document.getElementById('viewBalanceDue').textContent = `₱${balanceDue.toFixed(2)}`;
+    document.getElementById('viewPaymentReference').value = paymentReference || '';
+    document.getElementById('viewPaymentAmount').value = '';
     
     // Handle paid/fulfilled status
     isPaid = isPaid === true || isPaid === 'true' || isPaid === 'True';
@@ -1452,6 +1539,9 @@ function viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmoun
         subtotal,
         shipmentFee,
         totalAmount,
+        amountPaid: normalizedAmountPaid,
+        paymentReference: paymentReference || '',
+        balanceDue,
         isPaid,
         isFulfilled
     };
@@ -1510,6 +1600,60 @@ function markInvoicePaid() {
         } else {
             alert('Error: ' + result.message);
         }
+    })
+    .catch(error => {
+        alert('Error: ' + error);
+    });
+}
+
+function addInvoicePayment() {
+    if (!window.currentInvoiceData) return;
+
+    const paymentAmount = parseFloat(document.getElementById('viewPaymentAmount')?.value || 0) || 0;
+    const paymentReference = (document.getElementById('viewPaymentReference')?.value || '').trim();
+    if (paymentAmount <= 0) {
+        alert('Please enter a payment amount greater than zero.');
+        return;
+    }
+
+    fetch('/api/add_invoice_payment', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            invoice_number: window.currentInvoiceData.invoiceNumber,
+            created_at: window.currentInvoiceData.createdAt || '',
+            payment_amount: paymentAmount,
+            payment_reference: paymentReference
+        })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (!result.success) {
+            alert('Error: ' + result.message);
+            return;
+        }
+
+        const updatedPaid = parseFloat(result.amount_paid || 0);
+        const updatedBalance = parseFloat(result.balance_due || 0);
+        document.getElementById('viewAmountPaid').textContent = `₱${updatedPaid.toFixed(2)}`;
+        document.getElementById('viewBalanceDue').textContent = `₱${updatedBalance.toFixed(2)}`;
+        document.getElementById('viewPaymentAmount').value = '';
+
+        window.currentInvoiceData.amountPaid = updatedPaid;
+        window.currentInvoiceData.balanceDue = updatedBalance;
+        window.currentInvoiceData.isPaid = result.paid === true;
+        window.currentInvoiceData.paymentReference = paymentReference || window.currentInvoiceData.paymentReference;
+
+        const paidBadge = document.getElementById('paidBadge');
+        const markPaidBtn = document.getElementById('markPaidBtn');
+        if (window.currentInvoiceData.isPaid) {
+            paidBadge.style.display = 'inline-block';
+            markPaidBtn.textContent = 'Mark as Unpaid';
+            markPaidBtn.classList.remove('btn-success');
+            markPaidBtn.classList.add('btn-warning');
+        }
+        alert('Payment saved successfully.');
+        location.reload();
     })
     .catch(error => {
         alert('Error: ' + error);
@@ -1786,6 +1930,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const createdAt = this.getAttribute('data-created-at') || '';
             const totalAmount = parseFloat(this.getAttribute('data-total-amount') || 0);
             const shipmentFee = parseFloat(this.getAttribute('data-shipment-fee') || 0);
+            const amountPaid = parseFloat(this.getAttribute('data-amount-paid') || 0);
+            const paymentReference = this.getAttribute('data-payment-reference') || '';
             const isPaid = this.getAttribute('data-paid') === 'true';
             const isFulfilled = this.getAttribute('data-fulfilled') === 'true';
             
@@ -1800,7 +1946,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 items = [];
             }
             
-            viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmount, shipmentFee, isPaid, isFulfilled, createdAt);
+            viewInvoice(invoiceNumber, items, customerName, invoiceDate, totalAmount, shipmentFee, amountPaid, paymentReference, isPaid, isFulfilled, createdAt);
         });
     });
 
@@ -1813,6 +1959,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const invoiceDate = this.getAttribute('data-invoice-date');
             const createdAt = this.getAttribute('data-created-at') || '';
             const shipmentFee = parseFloat(this.getAttribute('data-shipment-fee') || 0);
+            const amountPaid = parseFloat(this.getAttribute('data-amount-paid') || 0);
+            const paymentReference = this.getAttribute('data-payment-reference') || '';
             let items = [];
             try {
                 items = JSON.parse(itemsJson || '[]');
@@ -1825,6 +1973,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 invoiceDate,
                 createdAt,
                 shipmentFee,
+                amountPaid,
+                paymentReference,
                 items
             });
         });
