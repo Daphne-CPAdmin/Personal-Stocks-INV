@@ -10,8 +10,8 @@
 
 <div class="card">
     <h3>Recent Invoices</h3>
-    <div class="table-container">
-        <table class="data-table">
+    <div class="table-container invoices-table-container">
+        <table id="invoiceListTable" class="data-table invoices-table">
             <thead>
                 <tr>
                     <th>Invoice #</th>
@@ -364,6 +364,46 @@
 <style>
 .invoice-items-section {
     margin: 1.5rem 0;
+}
+
+/* Keep invoice list visible without horizontal scroll */
+.invoices-table-container {
+    overflow-x: hidden !important;
+}
+
+#invoiceListTable {
+    width: 100%;
+    table-layout: fixed;
+}
+
+#invoiceListTable th,
+#invoiceListTable td {
+    padding: 0.4rem 0.25rem !important;
+    font-size: 0.68rem !important;
+    line-height: 1.2;
+    white-space: normal !important;
+    word-break: break-word;
+    text-align: center;
+    vertical-align: middle;
+    max-width: none !important;
+}
+
+#invoiceListTable th:nth-child(1) { width: 9%; }
+#invoiceListTable th:nth-child(2) { width: 12%; }
+#invoiceListTable th:nth-child(3) { width: 16%; }
+#invoiceListTable th:nth-child(4) { width: 8%; }
+#invoiceListTable th:nth-child(5) { width: 7%; }
+#invoiceListTable th:nth-child(6) { width: 9%; }
+#invoiceListTable th:nth-child(7) { width: 10%; }
+#invoiceListTable th:nth-child(8) { width: 9%; }
+#invoiceListTable th:nth-child(9) { width: 10%; }
+#invoiceListTable th:nth-child(10) { width: 10%; }
+
+#invoiceListTable td:last-child .btn {
+    width: 100%;
+    min-width: 0;
+    font-size: 0.62rem !important;
+    padding: 0.3rem 0.35rem !important;
 }
 
 .invoice-item {

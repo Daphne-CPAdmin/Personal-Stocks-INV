@@ -697,6 +697,89 @@ body::after {
     gap: 0.75rem;
 }
 
+/* Compact no-horizontal-scroll tables for non-invoice tabs */
+.inventory-table-container,
+.sold-table-container,
+.used-freebie-table-container {
+    overflow-x: hidden !important;
+}
+
+#inventoryListTable,
+#soldListTable,
+#usedItemsTable,
+#freebieItemsTable {
+    width: 100%;
+    table-layout: fixed;
+}
+
+#inventoryListTable th,
+#inventoryListTable td,
+#soldListTable th,
+#soldListTable td,
+#usedItemsTable th,
+#usedItemsTable td,
+#freebieItemsTable th,
+#freebieItemsTable td {
+    padding: 0.38rem 0.24rem !important;
+    font-size: 0.66rem !important;
+    line-height: 1.2;
+    white-space: normal !important;
+    word-break: break-word;
+    text-align: center;
+    vertical-align: middle;
+    max-width: none !important;
+}
+
+#inventoryListTable th:nth-child(1) { width: 14%; }
+#inventoryListTable th:nth-child(2) { width: 9%; }
+#inventoryListTable th:nth-child(3) { width: 9%; }
+#inventoryListTable th:nth-child(4) { width: 9%; }
+#inventoryListTable th:nth-child(5) { width: 6%; }
+#inventoryListTable th:nth-child(6) { width: 8%; }
+#inventoryListTable th:nth-child(7) { width: 12%; }
+#inventoryListTable th:nth-child(8) { width: 9%; }
+#inventoryListTable th:nth-child(9) { width: 8%; }
+#inventoryListTable th:nth-child(10) { width: 8%; }
+#inventoryListTable th:nth-child(11) { width: 8%; }
+
+#soldListTable th:nth-child(1) { width: 12%; }
+#soldListTable th:nth-child(2) { width: 6%; }
+#soldListTable th:nth-child(3) { width: 8%; }
+#soldListTable th:nth-child(4) { width: 8%; }
+#soldListTable th:nth-child(5) { width: 8%; }
+#soldListTable th:nth-child(6) { width: 8%; }
+#soldListTable th:nth-child(7) { width: 8%; }
+#soldListTable th:nth-child(8) { width: 10%; }
+#soldListTable th:nth-child(9) { width: 7%; }
+#soldListTable th:nth-child(10) { width: 8%; }
+#soldListTable th:nth-child(11) { width: 10%; }
+#soldListTable th:nth-child(12) { width: 7%; }
+
+#usedItemsTable th:nth-child(1),
+#freebieItemsTable th:nth-child(1) { width: 18%; }
+#usedItemsTable th:nth-child(2),
+#freebieItemsTable th:nth-child(2) { width: 9%; }
+#usedItemsTable th:nth-child(3),
+#freebieItemsTable th:nth-child(3) { width: 14%; }
+#usedItemsTable th:nth-child(4),
+#freebieItemsTable th:nth-child(4) { width: 14%; }
+#usedItemsTable th:nth-child(5),
+#freebieItemsTable th:nth-child(5) { width: 13%; }
+#usedItemsTable th:nth-child(6),
+#freebieItemsTable th:nth-child(6) { width: 18%; }
+#usedItemsTable th:nth-child(7),
+#freebieItemsTable th:nth-child(7) { width: 14%; }
+
+#inventoryListTable td:last-child .btn,
+#soldListTable td:last-child .btn,
+#usedItemsTable td:last-child .btn,
+#freebieItemsTable td:last-child .btn {
+    width: 100%;
+    min-width: 0;
+    font-size: 0.62rem !important;
+    padding: 0.28rem 0.32rem !important;
+}
+
 @media (max-width: 1200px) {
     .summary-cards-grid {
         grid-template-columns: repeat(3, 1fr);

@@ -766,6 +766,19 @@ def invoices():
                                 'subtotal': 0
                             })
                 invoices = list(invoices_dict.values())
+
+                # Show most recent invoices first.
+                def _sort_invoice_key(inv):
+                    created_at = inv.get('created_at', '')
+                    invoice_date = inv.get('invoice_date', '')
+                    dt = pd.to_datetime(created_at, errors='coerce')
+                    if pd.isna(dt):
+                        dt = pd.to_datetime(invoice_date, errors='coerce')
+                    if pd.isna(dt):
+                        return datetime.min
+                    return dt.to_pydatetime()
+
+                invoices = sorted(invoices, key=_sort_invoice_key, reverse=True)
         else:
             invoices = []
         
