@@ -101,6 +101,12 @@
                 </div>
             </div>
             <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #c4b5fd;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
+                    <span style="color:#6b7280; font-size:0.625rem; font-family:'Merriweather', Georgia, serif;">Avg Cost/Unit</span>
+                    <span style="color:#4c1d95; font-size:0.75rem; font-family:'Merriweather', Georgia, serif; font-weight:700;">
+                        ₱{{ "%.2f"|format(summary.normalized_cost_per_unit|default(0)) }}
+                    </span>
+                </div>
                 {% set percentage = (summary.total_remaining / summary.total_bought * 100) if summary.total_bought > 0 else 0 %}
                 <div style="background-color: #e5e7eb; border-radius: 0.25rem; height: 6px; position: relative; overflow: hidden;">
                     <div style="background-color: {% if percentage > 50 %}#10b981{% elif percentage > 25 %}#f59e0b{% else %}#ef4444{% endif %}; height: 100%; width: {{ percentage }}%; transition: width 0.3s;"></div>

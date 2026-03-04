@@ -265,16 +265,28 @@ def _apply_invoice_stock_sync(inventory_df, sold_df, invoice_number, created_at,
         if name and qty > 0:
             required_by_product[name] = required_by_product.get(name, 0) + qty
 
+    normalized_cost_by_product = {}
     for product_name, needed_qty in required_by_product.items():
         product_rows = inventory_df[inventory_df['product_name'].astype(str).str.strip() == product_name]
         available = product_rows['remaining_qty'].apply(lambda v: _safe_int(v, 0)).sum() if not product_rows.empty else 0
         if available < needed_qty:
             raise ValueError(f"Insufficient stock for '{product_name}'. Needed {needed_qty}, available {available}.")
+        weighted_cost_sum = 0.0
+        weighted_qty = 0
+        for _, inv_row in product_rows.iterrows():
+            row_qty = _safe_int(inv_row.get('remaining_qty', 0), 0)
+            if row_qty <= 0:
+                continue
+            row_cost = _safe_float(inv_row.get('total_cost_per_unit', 0), 0.0)
+            weighted_cost_sum += (row_cost * row_qty)
+            weighted_qty += row_qty
+        normalized_cost_by_product[product_name] = (weighted_cost_sum / weighted_qty) if weighted_qty > 0 else 0.0
 
     marker = _invoice_sync_marker(invoice_number, created_at)
     for item in items:
         product_name = str(item.get('name', '')).strip()
-        qty_to_consume = _safe_int(item.get('quantity', 0), 0)
+        requested_qty = _safe_int(item.get('quantity', 0), 0)
+        qty_to_consume = requested_qty
         unit_price = _safe_float(item.get('price', 0), 0.0)
         if not product_name or qty_to_consume <= 0:
             continue
@@ -292,25 +304,26 @@ def _apply_invoice_stock_sync(inventory_df, sold_df, invoice_number, created_at,
             inventory_df.at[idx, 'status'] = 'in_stock' if _safe_float(inventory_df.at[idx, 'remaining_qty'], 0) > 0 else 'out_of_stock'
             inventory_df.at[idx, 'date_sold'] = invoice_date or now_ts
 
-            cost_per_unit = _safe_float(inventory_df.at[idx, 'total_cost_per_unit'], 0.0)
-            line_revenue = unit_price * consume
-            total_cost = cost_per_unit * consume
-            profit = line_revenue - total_cost
-            tithe = profit * 0.10
-            sold_rows.append({
-                'product_name': product_name,
-                'quantity': consume,
-                'total_cost_per_unit': cost_per_unit,
-                'selling_price': line_revenue,
-                'total_cost': total_cost,
-                'profit': profit,
-                'tithe': tithe,
-                'profit_after_tithe': profit - tithe,
-                'tithe_kept': 'False',
-                'remarks': f"{marker}line:{product_name}",
-                'date_sold': invoice_date or now_ts
-            })
             qty_to_consume -= consume
+
+        normalized_cost_per_unit = _safe_float(normalized_cost_by_product.get(product_name, 0), 0.0)
+        line_revenue = unit_price * requested_qty
+        total_cost = normalized_cost_per_unit * requested_qty
+        profit = line_revenue - total_cost
+        tithe = profit * 0.10
+        sold_rows.append({
+            'product_name': product_name,
+            'quantity': requested_qty,
+            'total_cost_per_unit': normalized_cost_per_unit,
+            'selling_price': line_revenue,
+            'total_cost': total_cost,
+            'profit': profit,
+            'tithe': tithe,
+            'profit_after_tithe': profit - tithe,
+            'tithe_kept': 'False',
+            'remarks': f"{marker}line:{product_name}",
+            'date_sold': invoice_date or now_ts
+        })
 
     if sold_rows:
         sold_df = pd.concat([sold_df, pd.DataFrame(sold_rows)], ignore_index=True)
@@ -522,7 +535,9 @@ def inventory():
                             'product_name': product_name,
                             'total_bought': 0,
                             'total_remaining': 0,
-                            'entry_count': 0
+                            'entry_count': 0,
+                            'weighted_cost_sum': 0.0,
+                            'weighted_cost_qty': 0
                         }
                     # Safely convert quantities - use total_bought_quantity instead of quantity
                     try:
@@ -533,9 +548,17 @@ def inventory():
                     except (ValueError, TypeError):
                         total_bought = 0
                         remaining = 0
+                    cost_per_unit = _safe_float(item.get('total_cost_per_unit', 0), 0.0)
                     product_summary[product_name]['total_bought'] += total_bought
                     product_summary[product_name]['total_remaining'] += remaining
                     product_summary[product_name]['entry_count'] += 1
+                    if remaining > 0:
+                        product_summary[product_name]['weighted_cost_sum'] += (cost_per_unit * remaining)
+                        product_summary[product_name]['weighted_cost_qty'] += remaining
+                for pname in product_summary:
+                    w_qty = product_summary[pname].get('weighted_cost_qty', 0)
+                    w_sum = product_summary[pname].get('weighted_cost_sum', 0.0)
+                    product_summary[pname]['normalized_cost_per_unit'] = (w_sum / w_qty) if w_qty > 0 else 0.0
                 
                 # Convert summary dict to list sorted by product name
                 product_summary_list = sorted(product_summary.values(), key=lambda x: x['product_name'].lower())
@@ -599,7 +622,9 @@ def inventory():
                     'product_name': product_name,
                     'total_bought': 0,
                     'total_remaining': 0,
-                    'entry_count': 0
+                    'entry_count': 0,
+                    'weighted_cost_sum': 0.0,
+                    'weighted_cost_qty': 0
                 }
             # Safely convert quantities - use total_bought_quantity instead of quantity
             try:
@@ -610,9 +635,17 @@ def inventory():
             except (ValueError, TypeError):
                 total_bought = 0
                 remaining = 0
+            cost_per_unit = _safe_float(item.get('total_cost_per_unit', 0), 0.0)
             product_summary[product_name]['total_bought'] += total_bought
             product_summary[product_name]['total_remaining'] += remaining
             product_summary[product_name]['entry_count'] += 1
+            if remaining > 0:
+                product_summary[product_name]['weighted_cost_sum'] += (cost_per_unit * remaining)
+                product_summary[product_name]['weighted_cost_qty'] += remaining
+        for pname in product_summary:
+            w_qty = product_summary[pname].get('weighted_cost_qty', 0)
+            w_sum = product_summary[pname].get('weighted_cost_sum', 0.0)
+            product_summary[pname]['normalized_cost_per_unit'] = (w_sum / w_qty) if w_qty > 0 else 0.0
         
         # Convert summary dict to list sorted by product name
         product_summary_list = sorted(product_summary.values(), key=lambda x: x['product_name'].lower())
